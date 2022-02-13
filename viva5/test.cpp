@@ -27,15 +27,15 @@ namespace examples
         v.init(&info);
 
         vi::gl::texture* t = v.resources.addTexture();
-        vi::gl::createTextureFromFile(t, &v.graphics, "textures/0x72_DungeonTilesetII_v1.png");
+        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
         vi::util::rng rng;
 
         for (uint i = 0; i < count; i++)
         {
             vi::gl::sprite* s = v.resources.addSprite();
-            vi::gl::initSprite(s, t->index);
-            vi::gl::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &s->s2.uv1);
-            vi::gl::setPixelScale(&v.graphics, 6*2, 13*2, &s->s1.sx, &s->s1.sy);
+            s->init(t->index);
+            v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+            v.graphics.setPixelScale(s, 6*2, 13*2);
             s->s1.rot = rng.rnd() * 2.0f * 3.1415926f;
             s->s1.x = rng.rnd() * 2.0f - 1;
             s->s1.y = rng.rnd() * 2.0f - 1;
@@ -542,111 +542,103 @@ namespace examples
 
         vi::graphics::destroyTexture(&data.v.graphics, data.tex);
         data.v.destroy();
-    }
+    }*/
 
     // move camera with WSAD zoom Q/E
     // zooming should be towards the center of the screen
     void camera()
     {
-        gameData data;
-        auto loop = [&](uint i)
-        {
-            data.v.timer.update();
-            data.v.keyboard.update();
-            float frameTime = data.v.timer.getTickTimeSec();
-
-            if (data.v.keyboard.isKeyDown('A')) data.v.camera.x -= frameTime;
-            else if (data.v.keyboard.isKeyDown('D')) data.v.camera.x += frameTime;
-
-            if (data.v.keyboard.isKeyDown('W')) data.v.camera.y -= frameTime;
-            else if (data.v.keyboard.isKeyDown('S')) data.v.camera.y += frameTime;
-
-            if (data.v.keyboard.isKeyDown('Q')) data.v.camera.scale *= 1 - frameTime * .3f;
-            else if (data.v.keyboard.isKeyDown('E')) data.v.camera.scale *= 1 + frameTime * .3f;
-
-            vi::graphics::drawScene(&data.v.graphics, data.sprites, 10, &data.v.camera);
-        };
+        vi::viva v;        
 
         vi::vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Camera";
-        data.v.init(&info);
+        v.init(&info);
 
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/0x72_DungeonTilesetII_v1.png", data.tex);
-        vi::graphics::pushTextures(&data.v.graphics, data.tex, 1);
+        vi::gl::texture* t = v.resources.addTexture();
+        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
 
-        vi::graphics::initSprite(data.sprites, data.tex[0].index);
-        data.sprites[0].s2.pos = { -1,-1 };
-        vi::graphics::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &data.sprites->s2.uv1);
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 6 * 10, 13 * 10, 
-            &data.sprites[0].s1.sx, &data.sprites[0].s1.sy);
+        vi::gl::sprite* s1 = v.resources.addSprite();
+        s1->init(t->index);
+        s1->s2.pos = { -1,-1 };
+        v.graphics.setUvFromPixels(s1, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+        v.graphics.setPixelScale(s1, 6 * 10, 13 * 10);
 
-        vi::graphics::initSprite(data.sprites + 1, data.tex[0].index);
-        data.sprites[1].s2.pos = { 1,-1 };
-        vi::graphics::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &data.sprites[1].s2.uv1);
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 6 * 10, 13 * 10, 
-            &data.sprites[1].s1.sx, &data.sprites[1].s1.sy);
+        vi::gl::sprite* s2 = v.resources.addSprite();
+        s2->init(t->index);
+        s2->s2.pos = { 1,-1 };
+        v.graphics.setUvFromPixels(s2, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+        v.graphics.setPixelScale(s2, 6 * 10, 13 * 10);
 
-        vi::graphics::initSprite(data.sprites + 2, data.tex[0].index);
-        data.sprites[2].s2.pos = { -1,1 };
-        vi::graphics::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &data.sprites[2].s2.uv1);
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 6 * 10, 13 * 10, 
-            &data.sprites[2].s1.sx, &data.sprites[2].s1.sy);
+        vi::gl::sprite* s3 = v.resources.addSprite();
+        s3->init(t->index);
+        s3->s2.pos = { -1,1 };
+        v.graphics.setUvFromPixels(s3, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+        v.graphics.setPixelScale(s3, 6 * 10, 13 * 10);
 
-        vi::graphics::initSprite(data.sprites + 3, data.tex[0].index);
-        data.sprites[3].s2.pos = { 1,1 };
-        vi::graphics::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &data.sprites[3].s2.uv1);
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 6 * 10, 13 * 10, 
-            &data.sprites[3].s1.sx, &data.sprites[3].s1.sy);
+        vi::gl::sprite* s4 = v.resources.addSprite();
+        s4->init(t->index);
+        s4->s2.pos = { 1,1 };
+        v.graphics.setUvFromPixels(s4, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+        v.graphics.setPixelScale(s4, 6 * 10, 13 * 10);
 
-        vi::graphics::initSprite(data.sprites + 4, data.tex[0].index);
-        vi::graphics::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &data.sprites[4].s2.uv1);
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 6 * 10, 13 * 10, 
-            &data.sprites[4].s1.sx, &data.sprites[4].s1.sy);
+        vi::gl::sprite* s5 = v.resources.addSprite();
+        s5->init(t->index);
+        v.graphics.setUvFromPixels(s5, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+        v.graphics.setPixelScale(s5, 6 * 10, 13 * 10);
 
-        vi::system::loop<uint>(loop, 0);
+        auto loop = [&]()
+        {
+            float frameTime = v.timer.getTickTimeSec();
 
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        data.v.destroy();
+            if (v.keyboard.isKeyDown('A')) v.graphics.camera.x -= frameTime;
+            else if (v.keyboard.isKeyDown('D')) v.graphics.camera.x += frameTime;
+
+            if (v.keyboard.isKeyDown('W')) v.graphics.camera.y -= frameTime;
+            else if (v.keyboard.isKeyDown('S')) v.graphics.camera.y += frameTime;
+
+            if (v.keyboard.isKeyDown('Q')) v.graphics.camera.scale *= 1 - frameTime * .3f;
+            else if (v.keyboard.isKeyDown('E')) v.graphics.camera.scale *= 1 + frameTime * .3f;
+        };
+
+        v.loop(loop);
+
+        v.destroy();
     }
-        
+    
     // just to make sure they still work
     void multipleTextures()
     {
-        auto loop = [](gameData* _gameData)
-        {
-            vi::graphics::drawScene(&_gameData->v.graphics, _gameData->sprites, 3, &_gameData->v.camera);
-        };
-
-        gameData data;
+        vi::viva v;
         vi::vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Multiple textures";
-        data.v.init(&info);
-        data.v.camera.scale = 0.5f;
+        v.init(&info);
+        v.graphics.camera.scale = 0.5f;
 
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/bk.png", data.tex);
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/elf.png", data.tex + 1);
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/sm.png", data.tex + 2);
+        vi::gl::texture* t1 = v.resources.addTexture();
+        v.graphics.createTextureFromFile(t1, "textures/bk.png");
+        vi::gl::texture* t2 = v.resources.addTexture();
+        v.graphics.createTextureFromFile(t2, "textures/elf.png");
+        vi::gl::texture* t3 = v.resources.addTexture();
+        v.graphics.createTextureFromFile(t3, "textures/sm.png");
 
-        vi::graphics::pushTextures(&data.v.graphics, data.tex, 3);
+        vi::gl::sprite* s1 = v.resources.addSprite();
+        s1->init(t1->index);
+        s1->s2.pos = { -1,1 };
+        vi::gl::sprite* s2 = v.resources.addSprite();
+        s2->init(t2->index);
+        s2->s2.pos = { -1,-1 };
+        vi::gl::sprite* s3 = v.resources.addSprite();
+        s3->init(t3->index);
+        s3->s2.pos = { 1,-1 };
 
-        vi::graphics::initSprite(data.sprites, data.tex[0].index);
-        data.sprites[0].s2.pos = { -1,1 };
-        vi::graphics::initSprite(data.sprites + 1, data.tex[1].index);
-        data.sprites[1].s2.pos = { -1,-1 };
-        vi::graphics::initSprite(data.sprites + 2, data.tex[2].index);
-        data.sprites[2].s2.pos = { 1,-1 };
+        v.loop(empty);
 
-        vi::system::loop<gameData*>(loop, &data);
-
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex + 1);
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex + 2);
-        data.v.destroy();
-    }*/
+        v.destroy();
+    }
 
     // move with WSAD, flip sword with SPACE (this is to test keyPressed)
     // there a lot of noise to make it more interesting
@@ -667,8 +659,8 @@ namespace examples
         v.init(&info);
 
         // init textures
-        auto t = v.resources.addTexture();
-        vi::gl::createTextureFromFile(t, &v.graphics, "textures/0x72_DungeonTilesetII_v1.png");
+        vi::gl::texture* t = v.resources.addTexture();
+        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
 
         // init elf
         struct 
@@ -682,16 +674,16 @@ namespace examples
         elf.s = v.resources.addSprite();
         elf.walk = v.resources.addAnimation();
         elf.idle = v.resources.addAnimation();
-        vi::gl::initSprite(elf.s, t->index);
-        vi::gl::setPixelScale(&v.graphics, 16 * 4, 28 * 4, &elf.s->s1.sx, &elf.s->s1.sy);
+        elf.s->init(t->index);
+        v.graphics.setPixelScale(elf.s, 16 * 4, 28 * 4);
         vi::gl::uvSplitInfo usi1 = { 512,512,192,4,16,28,4,4 };
-        vi::gl::uvSplit(&usi1, elf.walkUv);
-        vi::gl::initAnimation(elf.walk, elf.s, &v.timer, elf.walkUv, 4, 0.09f, 0);
+        v.graphics.uvSplit(&usi1, elf.walkUv);
+        elf.walk->init(elf.s, &v.timer, elf.walkUv, 4, 0.09f, 0);
         vi::gl::uv elfIdleAni[4];
         vi::gl::uvSplitInfo usi2 = { 512,512,128,4,16,28,4,4 };
-        vi::gl::uvSplit(&usi2, elf.idleUv);
-        vi::gl::initAnimation(elf.idle, elf.s, &v.timer, elf.idleUv, 4, 0.1f, 0);
-        vi::gl::playAnimation(elf.idle);
+        v.graphics.uvSplit(&usi2, elf.idleUv);
+        elf.idle->init(elf.s, &v.timer, elf.idleUv, 4, 0.1f, 0);
+        elf.idle->play();
 
         struct
         {
@@ -703,28 +695,26 @@ namespace examples
             vi::gl::animation* walk;
         } monster;
         monster.s = v.resources.addSprite();
-        monster.walk = v.resources.addAnimation();
-        monster.idle = v.resources.addAnimation();
-        monster.d = v.resources.addDynamic();
-        *monster.d = {};
-        monster.d->t = &v.timer;
-        monster.d->s = monster.s;
-        vi::gl::initSprite(monster.s, t->index);
+        monster.s->init(t->index);
         monster.s->s1.x = 1;
-        vi::gl::setPixelScale(&v.graphics, 16 * 4, 20 * 4, &monster.s->s1.sx, &monster.s->s1.sy);
+        v.graphics.setPixelScale(monster.s, 16 * 4, 20 * 4);
+        monster.d = v.resources.addDynamic();
+        monster.d->init(monster.s, &v.timer);
         vi::gl::uvSplitInfo usi3 = { 512,512,432,204,16,20,4,4 };
-        vi::gl::uvSplit(&usi3, monster.walkUv);
-        vi::gl::initAnimation(monster.walk, monster.s, &v.timer, monster.walkUv, 4, 0.09f, 0);
+        v.graphics.uvSplit(&usi3, monster.walkUv);
+        monster.walk = v.resources.addAnimation();
+        monster.walk->init(monster.s, &v.timer, monster.walkUv, 4, 0.09f, 0);
         vi::gl::uvSplitInfo usi4 = { 512,512,368,204,16,20,4,4 };
-        vi::gl::uvSplit(&usi4, monster.idleUv);
-        vi::gl::initAnimation(monster.idle, monster.s, &v.timer, monster.idleUv, 4, 0.1f, 0);
-        vi::gl::playAnimation(monster.idle);
+        v.graphics.uvSplit(&usi4, monster.idleUv);
+        monster.idle = v.resources.addAnimation();
+        monster.idle->init(monster.s, &v.timer, monster.idleUv, 4, 0.1f, 0);
+        monster.idle->play();
 
         vi::gl::sprite* knife = v.resources.addSprite();
-        vi::gl::initSprite(knife, t->index);
+        knife->init(t->index);
         knife->s1.x = -1;
-        vi::gl::setPixelScale(&v.graphics, 8 * 4, 19 * 4, &knife->s1.sx, &knife->s1.sy);
-        vi::gl::setUvFromPixels(310, 124, 8, 19, 512, 512, &knife->s2.uv1);
+        v.graphics.setPixelScale(knife, 8 * 4, 19 * 4);
+        v.graphics.setUvFromPixels(knife, 310, 124, 8, 19, 512, 512);
 
         auto loop = [&]()
         {
@@ -743,8 +733,8 @@ namespace examples
                 if (elfDirection > 0)
                 {
                     elfDirection = -1;
-                    vi::gl::animationFlipHorizontally(elf.walk);
-                    vi::gl::animationFlipHorizontally(elf.idle);
+                    elf.walk->flipHorizontally();
+                    elf.idle->flipHorizontally();
                 }
 
                 elfIsMoving = true;
@@ -756,8 +746,8 @@ namespace examples
                 if (elfDirection < 0)
                 {
                     elfDirection = 1;
-                    vi::gl::animationFlipHorizontally(elf.walk);
-                    vi::gl::animationFlipHorizontally(elf.idle);
+                    elf.walk->flipHorizontally();
+                    elf.idle->flipHorizontally();
                 }
 
                 elfIsMoving = true;
@@ -786,19 +776,19 @@ namespace examples
                     elf.s->s1.x, elf.s->s1.y, 0.9f,
                     &monster.d->velx, &monster.d->vely);
                 // switch from idle to walk
-                vi::gl::switchAnimation(monster.idle, monster.walk);
+                monster.idle->change(monster.walk);
 
                 if (monsterDirection > 0 && monster.d->velx < 0)
                 {
                     monsterDirection = -1;
-                    vi::gl::animationFlipHorizontally(monster.walk);
-                    vi::gl::animationFlipHorizontally(monster.idle);
+                    monster.walk->flipHorizontally();
+                    monster.idle->flipHorizontally();
                 }
                 else if (monsterDirection < 0 && monster.d->velx > 0)
                 {
                     monsterDirection = 1;
-                    vi::gl::animationFlipHorizontally(monster.walk);
-                    vi::gl::animationFlipHorizontally(monster.idle);
+                    monster.walk->flipHorizontally();
+                    monster.idle->flipHorizontally();
                 }
             }
 
@@ -811,16 +801,14 @@ namespace examples
                 monster.d->velx = 0;
                 monster.d->vely = 0;
                 // switch from walk to idle
-                vi::gl::switchAnimation(monster.walk, monster.idle);
+                monster.walk->change(monster.idle);
             }
 
             // 'switchAnimation' is the most convenient way (as of writing this) to switch animation
             // 'switchAnimation' does nothing if correct animation is already playing
             // i.e. you dont have to check if state actually changed
-            if (elfIsMoving)
-                vi::gl::switchAnimation(elf.idle, elf.walk);
-            else
-                vi::gl::switchAnimation(elf.walk, elf.idle);
+            if (elfIsMoving) elf.idle->change(elf.walk);
+            else elf.walk->change(elf.idle);
 
             // swap cleaver
             if (v.keyboard.isKeyPressed(vi::input::key::SPACE))
@@ -845,35 +833,33 @@ namespace examples
         v.graphics.camera.scale = 0.1f;
 
         vi::gl::texture* t = v.resources.addTexture();
-        vi::gl::createTextureFromFile(t, &v.graphics, "textures/0x72_DungeonTilesetII_v1.png");
+        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
 
 #define MAKE_SPRITE(__x,__y,__rot,__sx,__sy,__r,__g,__b) { vi::gl::sprite* s = v.resources.addSprite(); \
-        *s = {}; \
-        vi::gl::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &s->s2.uv1); \
+        s->init(t->index); \
+        v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f); \
         s->s2.col = {__r,__g,__b}; \
         s->s2.pos = {__x,__y}; \
         s->s2.rot = __rot; \
-        s->s2.textureIndex = t->index; \
-        vi::gl::setPixelScale(&v.graphics, 6 * __sx, 13 * __sy, \
-            &s->s1.sx, &s->s1.sy); }
+        v.graphics.setPixelScale(s, 6 * __sx, 13 * __sy); }
 
         MAKE_SPRITE(-14, -0, 0, 10, 10, 1, 1, 1)
-            MAKE_SPRITE(-10, -0, 0, 10, 10, 1, 1, 1)
-            MAKE_SPRITE(-6, -0, 0, 10, 10, 1, 1, 1)
-            MAKE_SPRITE(-2, -0, 0, 10, 10, 1, 1, 1)
+        MAKE_SPRITE(-10, -0, 0, 10, 10, 1, 1, 1)
+        MAKE_SPRITE(-6, -0, 0, 10, 10, 1, 1, 1)
+        MAKE_SPRITE(-2, -0, 0, 10, 10, 1, 1, 1)
 
 #undef MAKE_SPRITE
 
         // make one object spin
         vi::gl::dynamic* d = v.resources.addDynamic();
-        vi::gl::initDynamic(d, v.resources.sprites[0], &v.timer);
+        d->init(v.resources.sprites[0], &v.timer);
         d->velrot = 1.f;
 
         // init sprite for animation
         vi::gl::sprite* elf = v.resources.addSprite();
-        vi::gl::initSprite(elf, t->index);
+        elf->init(t->index);
         elf->s2.pos = { 4,2 };
-        vi::gl::setPixelScale(&v.graphics, 16 * 4, 28 * 4, &elf->s1.sx, &elf->s1.sy);
+        v.graphics.setPixelScale(elf, 16 * 4, 28 * 4);
         // init uv for animation using convenience function
         vi::gl::uv uvForAni[9];
         vi::gl::uvSplitInfo usi = {};
@@ -885,11 +871,11 @@ namespace examples
         usi.pixelTexHeight = 512;
         usi.pixelTexWidth = 512;
         usi.rowLength = 4;
-        vi::gl::uvSplit(&usi, uvForAni);
+        v.graphics.uvSplit(&usi, uvForAni);
         // init animation
         vi::gl::animation* ani = v.resources.addAnimation();
-        vi::gl::initAnimation(ani, elf, &v.timer, uvForAni, 4, 0.1f, 0);
-        vi::gl::playAnimation(ani);
+        ani->init(elf, &v.timer, uvForAni, 4, 0.1f, 0);
+        ani->play();
 
         auto loop = [&]()
         {
@@ -902,8 +888,6 @@ namespace examples
         };
 
         v.loop(loop);
-
-        vi::gl::destroyTexture(t);
         v.destroy();
     }
 
@@ -919,17 +903,17 @@ namespace examples
         v.graphics.camera.scale = 0.1f;
 
         vi::gl::texture* t = v.resources.addTexture();
-        vi::gl::createTextureFromFile(t, &v.graphics, "textures/0x72_DungeonTilesetII_v1.png");
+        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
 
 #define MAKE_SPRITE(__x,__y,__rot,__sx,__sy,__r,__g,__b) { \
         vi::gl::sprite* s = v.resources.addSprite(); \
-        vi::gl::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &s->s2.uv1); \
+        v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f); \
         s->s2.col = {__r,__g,__b}; \
         s->s2.pos = {__x,__y}; \
         s->s2.rot = __rot; \
         s->s2.origin = {0,0}; \
         s->s2.textureIndex = t->index; \
-        vi::gl::setPixelScale(&v.graphics, 6 * __sx, 13 * __sy, &s->s1.sx, &s->s1.sy); }
+        v.graphics.setPixelScale(s, 6 * __sx, 13 * __sy); }
 
         // different scales
         MAKE_SPRITE(-14, -5, 0, 10, 10, 1, 1, 1)
@@ -969,7 +953,6 @@ namespace examples
 
         v.loop(empty);
 
-        vi::gl::destroyTexture(t);
         v.destroy();
     }
 
@@ -989,28 +972,28 @@ namespace examples
         ginfo.clearColor[2] = 1;
         ginfo.clearColor[3] = 1;
         vi::gl::renderer g;
-        vi::gl::graphicsInit(&ginfo, &g);
+        g.init(&ginfo);
         vi::gl::texture t;
-        vi::gl::createTextureFromFile(&t, &g, "textures/0x72_DungeonTilesetII_v1.png");
+        g.createTextureFromFile(&t, "textures/0x72_DungeonTilesetII_v1.png");
         t.index = 0;
         vi::gl::sprite s;
-        vi::gl::initSprite(&s, t.index);
-        vi::gl::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &s.s2.uv1);
-        vi::gl::setPixelScale(&g, 6 * 10, 13 * 10, &s.s1.sx, &s.s1.sy);
+        s.init(t.index);
+        g.setUvFromPixels(&s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+        g.setPixelScale(&s, 6 * 10, 13 * 10);
         vi::gl::sprite blank;
-        vi::gl::initSprite(&blank, vi::gl::TEXTURE_BLANK);
+        blank.init(vi::gl::TEXTURE_BLANK);
         blank.s2.col = { 0.5f,1.0f,0 };
 
         while (vi::system::updateWindow(&wnd))
         {
-            vi::gl::beginScene(&g);
-            vi::gl::drawSprite(&g, &s, &t);
-            vi::gl::drawSprite(&g, &blank, nullptr);
-            vi::gl::endScene(&g);
+            g.beginScene();
+            g.drawSprite(&s, &t);
+            g.drawSprite(&blank, nullptr);
+            g.endScene();
         }
 
-        vi::gl::destroyTexture(&t);
-        vi::gl::destroyGraphics(&g);
+        g.destroyTexture(&t);
+        g.destroy();
         vi::system::destroyWindow(&wnd);
     }
 
@@ -1031,7 +1014,7 @@ namespace examples
         // create some texture
         // this should be done once per level/game because resource creation is expensive
         vi::gl::texture* t = v.resources.addTexture();
-        vi::gl::createTextureFromFile(t, &v.graphics, "textures/0x72_DungeonTilesetII_v1.png");
+        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
 
         // initialize one sprite for drawing
         // CRUCIAL FIELDS
@@ -1042,21 +1025,20 @@ namespace examples
         // "sx,sy" is scale, use something other than 0,0 because it means that sprite is infinitely small
         // "r,g,b" are color coefficients, texel is multiplied by them so use 1,1,1 if you want to use texel as it is
         vi::gl::sprite* s = v.resources.addSprite();
-        vi::gl::initSprite(s, t->index);
-        vi::gl::setUvFromPixels(293.f, 18.f, 6.f, 13.f, 512.f, 512.f, &s->s2.uv1);        
+        s->init(t->index);
+        v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
 
         // in this case, object on the texture is 6x13 pixels
         // i want to set it to 60x130 to make it biger but still proportional
-        vi::gl::setPixelScale(&v.graphics, 6 * 10, 13 * 10, &s->s1.sx, &s->s1.sy);
+        v.graphics.setPixelScale(s, 6 * 10, 13 * 10);
 
         // add blank sprite (no texture required, just set index to vi::gl::TEXTURE_BLANK)
         vi::gl::sprite* blank = v.resources.addSprite();
-        vi::gl::initSprite(blank, vi::gl::TEXTURE_BLANK);
+        blank->init(vi::gl::TEXTURE_BLANK);
         blank->s2.col = { 0.5f,1.0f,0 };
 
         v.loop(empty);
 
-        vi::gl::destroyTexture(t);
         v.destroy();
     }
 
@@ -1068,9 +1050,9 @@ namespace examples
         timerMotionAnimation();
         performance();
         keyboardMultipleAnimationsMath();
-        /*multipleTextures();
+        multipleTextures();
         camera();
-        text();
+        /*text();
         inputState();
         typing();
         mouseAndFixedSprite();

@@ -901,6 +901,16 @@ VS_OUTPUT main(uint vid : SV_VertexID)
     {
         sprite1 s1;
         sprite2 s2;
+
+        // makes minimum changes to make object show when drawn
+        void init(uint textureIndex)
+        {
+            vi::util::zero(this);
+            this->s2.textureIndex = textureIndex;
+            this->s2.col = { 1,1,1 };
+            this->s2.scale = { 1,1 };
+            this->s2.uv1 = { 0,0,1,1 };
+        }
     };
 
     struct dynamic
@@ -918,6 +928,34 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         // grow acceleration
         float accsx, accsy;
         float _lastUpdate;
+
+        void init(sprite* s, time::timer* t)
+        {
+            vi::util::zero(this);
+            this->s = s;
+            this->t = t;
+            this->_lastUpdate = t->getGameTimeSec();
+        }
+
+        void update()
+        {
+            float currentTime = this->t->getGameTimeSec();
+            float delta = currentTime - this->_lastUpdate;
+            this->_lastUpdate = currentTime;
+
+            this->velx += this->accx * delta;
+            this->s->s1.x += this->velx * delta;
+            this->vely += this->accy * delta;
+            this->s->s1.y += this->vely * delta;
+            this->velz += this->accz * delta;
+            this->s->s1.z += this->velz * delta;
+            this->velrot += this->accrot * delta;
+            this->s->s1.rot += this->velrot * delta;
+            this->velsx += this->accsx * delta;
+            this->s->s1.sx += this->velsx * delta;
+            this->velsy += this->accsy * delta;
+            this->s->s1.sy += this->velsy * delta;
+        }
     };
 
     struct texture
@@ -933,7 +971,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
     {
         sprite* s;
         time::timer* t;
-        uv* uv;
+        uv* u;
         float speed;
         uint frameCount;
         int currentFrame;
@@ -945,17 +983,118 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         float _elapsedTime;
         float _lastUpdate;
         bool _playing;
+
+        // 'stopAfter' stop animation after that many frame changes, 0 = never stop
+        void init(sprite* s, time::timer* t, uv* u, uint frameCount, float secondsPerFrame, uint stopAfter)
+        {
+            this->t = t;
+            this->s = s;
+            this->u = u;
+            this->speed = secondsPerFrame;
+            this->frameCount = frameCount;
+            this->currentFrame = 0;
+            this->stopAfter = stopAfter;
+            this->frameChanged = false;
+            this->_elapsedTime = 0;
+            this->_playing = false;
+            this->_frameChanges = 0;
+            // update uv to the current frame
+            this->s->s2.uv1 = this->u[this->currentFrame];
+        }
+
+        // make 'updateAnimation' animate frames
+        void play()
+        {
+            if (this->_playing) return;
+
+            this->_playing = true;
+            this->_lastUpdate = this->t->getGameTimeSec();
+            // update uv to the current frame
+            this->s->s2.uv1 = { this->u[this->currentFrame] };
+        }
+
+        // animation will stop and 'updateAnimation' will no longer animate frames
+        void pause()
+        {
+            this->_playing = false;
+        }
+
+        // stop and reset animation so it can be played from the beginning
+        void reset()
+        {
+            this->currentFrame = 0;
+            this->frameChanged = false;
+            this->_elapsedTime = 0;
+            this->_playing = false;
+            this->_frameChanges = 0;
+        }
+
+        // stops playing 'from' starts playing 'to'
+        // if 'from' is not playing ot 'to' is playing then nothing happens
+        void change(animation* dst)
+        {
+            if (!this->_playing || dst->_playing) return;
+
+            this->reset();
+            dst->play();
+        }
+
+        void flipHorizontally()
+        {
+            for (uint i = 0; i < this->frameCount; i++)
+                util::swap(this->u[i].left, this->u[i].right);
+        }
+
+        void flipVertically()
+        {
+            for (uint i = 0; i < this->frameCount; i++)
+                util::swap(this->u[i].top, this->u[i].bottom);
+        }
+
+        // current algorithm 
+        // measure how much time elapsed since last update and add it to total time elapsed
+        // if total time elapsed is greater than speed (thus measured in seconds per frame)
+        // then reduce total time elapsed by speed and change frame
+        void update()
+        {
+            // not playing, early break
+            if (!this->_playing) return;
+
+            // set frame changed to false to invalidate previous true
+            this->frameChanged = false;
+            float gameTime = this->t->getGameTimeSec();
+            // elpased since last update
+            float elapsed = gameTime - this->_lastUpdate;
+            // update last update
+            this->_lastUpdate = gameTime;
+            // update elapsed
+            this->_elapsedTime += elapsed;
+
+            // see if enough time elapsed to change frame
+            if (this->_elapsedTime > this->speed)
+            {
+                // subtract the duration of one frame
+                this->_elapsedTime -= this->speed;
+                // update frame index including looping
+                this->currentFrame = (this->currentFrame + 1) % this->frameCount;
+                this->frameChanged = true;
+                this->_frameChanges++;
+
+                // update uv
+                uv* uv = this->u + this->currentFrame;
+                this->s->s2.uv1 = *uv;
+
+                // enough frame changed occured so stop playing
+                if (this->stopAfter != 0 && this->_frameChanges > this->stopAfter)
+                    this->_playing = false;
+            }
+        }
     };
 
     struct font
     {
         texture* tex;
         uv uv[256];
-
-        void init(texture* t)
-        {
-            this->tex = t;
-        }
     };
 
     struct text
@@ -1019,6 +1158,20 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         float clearColor[4];
     };
 
+    enum class TextureFilter { Point, Linear };
+
+    struct uvSplitInfo
+    {
+        uint pixelTexWidth;
+        uint pixelTexHeight;
+        uint pixelOffsetx;
+        uint pixelOffsety;
+        uint pixelFrameWidth;
+        uint pixelFrameHeight;
+        uint rowLength;
+        uint frameCount;
+    };
+
     struct renderer
     {
         system::window* window;
@@ -1029,7 +1182,6 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         ID3D11VertexShader* defaultVS;
         ID3D11PixelShader* defaultPS;
         ID3D11PixelShader* defaultPost;
-        ID3D11InputLayout* layout; //vertex input layout pos:float[3] col:float[3] uv:float[2]
         ID3D11DepthStencilView* depthStencilView;
         ID3D11Texture2D* depthStencilBuffer;
         ID3D11RasterizerState* wireframe;
@@ -1046,580 +1198,436 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         double gameTime;
         double frameTime;
         bool fullscreen;
-    };
 
-    enum class TextureFilter { Point, Linear };
-
-    void Checkhr(HRESULT hr, int line)
-    {
-        if (hr == 0)
-            return;
-        char str[128];
-        FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, 0,
-            hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
-            str, 128, 0);
-        fprintf(stderr, str);
-    }
-
-    ID3D11SamplerState* CreateSampler(renderer* g, TextureFilter mode)
-    {
-        ID3D11SamplerState* sampler;
-        D3D11_SAMPLER_DESC sampDesc;
-        ZeroMemory(&sampDesc, sizeof(sampDesc));
-        sampDesc.Filter = mode == TextureFilter::Point ?
-            D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-        sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-        sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-        sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-        sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-        sampDesc.MinLOD = 0;
-        sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
-        g->device->CreateSamplerState(&sampDesc, &sampler);
-        return sampler;
-    }
-
-    ID3D11PixelShader* CreatePixelShaderFromString(renderer* g, const char* str, const char* entryPoint, const char* target)
-    {
-        ID3D11PixelShader* result;
-        ID3D10Blob* ps;
-        ID3D10Blob* errorMsg;
-        HRESULT hr = D3DCompile(str, strlen(str), 0, 0, 0, entryPoint, target, 0, 0, &ps, &errorMsg);
-        if (errorMsg != nullptr)
+        void checkhr(HRESULT hr, int line)
         {
-            void* ptr = errorMsg->GetBufferPointer();
-            uint sz = errorMsg->GetBufferSize();
-            byte buffer[1000];
-            memset(buffer, 0, 1000);
-            memcpy(buffer, ptr, sz);
-            fprintf(stderr, "%s\n", buffer);
-            return nullptr;
+            if (hr == 0) return;
+            char str[128];
+            FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, 0,
+                hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
+                str, 128, 0);
+            fprintf(stderr, str);
         }
-        else
+
+        ID3D11SamplerState* createSampler(TextureFilter mode)
         {
-            Checkhr(hr, __LINE__);
+            ID3D11SamplerState* sampler;
+            D3D11_SAMPLER_DESC sampDesc;
+            ZeroMemory(&sampDesc, sizeof(sampDesc));
+            sampDesc.Filter = mode == TextureFilter::Point ?
+                D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+            sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+            sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+            sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+            sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+            sampDesc.MinLOD = 0;
+            sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
+            this->device->CreateSamplerState(&sampDesc, &sampler);
+            return sampler;
         }
-        //D3DCompile
-        hr = g->device->CreatePixelShader(ps->GetBufferPointer(), ps->GetBufferSize(), 0, &result);
-        Checkhr(hr, __LINE__);
-        ps->Release();
-        return result;
-    }
 
-    ID3D11VertexShader* CreateVertexShaderFromString(renderer* g, const char* str, const char* entryPoint, const char* target)
-    {
-        ID3D11VertexShader* result = nullptr;
-        ID3D10Blob* vs;
-        ID3D10Blob* errorMsg;
-        HRESULT hr = D3DCompile(str, strlen(str), 0, 0, 0, entryPoint, target, 0, 0, &vs, &errorMsg);
-        
-        if (errorMsg != nullptr)
+        ID3D11PixelShader* createPixelShaderFromString(const char* str, 
+            const char* entryPoint, const char* target)
         {
-            void* ptr = errorMsg->GetBufferPointer();
-            uint sz = errorMsg->GetBufferSize();
-            byte buffer[1000];
-            memset(buffer, 0, 1000);
-            memcpy(buffer, ptr, sz);
-            fprintf(stderr, "%s\n", buffer);
-            return nullptr;
-        }
-        else
-        {
-            Checkhr(hr, __LINE__);
-        }
-        hr = g->device->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), 0,
-            &result);
-        Checkhr(hr, __LINE__);
-        vs->Release();
-        return result;
-    }
-
-    void graphicsInit(rendererInfo* info, renderer* g)
-	{        
-        HRESULT hr = 0;
-        g->window = info->wnd;
-        g->fullscreen = false;
-        //assign global variable
-        memcpy(g->backBufferColor, info->clearColor, sizeof(float) * 4);
-
-        // camera
-        g->camera.aspectRatio = g->window->width / (float)g->window->height;
-        g->camera.rotation = 0;
-        g->camera.scale = 1;
-        g->camera.x = 0;
-        g->camera.y = 0;
-
-        //// *********** PIPELINE SETUP STARTS HERE *********** ////
-        // create a struct to hold information about the swap chain
-        DXGI_SWAP_CHAIN_DESC scd;
-        ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
-        scd.BufferCount = 1;                                    // one back buffer
-        scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;     // use 32-bit color
-        scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;      // how swap chain is to be used
-        scd.OutputWindow = info->wnd->handle;                   // the window to be used
-        scd.SampleDesc.Quality = 0;
-        scd.SampleDesc.Count = 1;                               // no anti aliasing
-        scd.Windowed = TRUE;                                    // windowed/full-screen mode
-        //scd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;   // alternative fullscreen mode
-
-        UINT creationFlags = D3D11_CREATE_DEVICE_SINGLETHREADED;
-
-        ////    DEVICE, DEVICE CONTEXT AND SWAP CHAIN    ////
-        hr = D3D11CreateDeviceAndSwapChain(NULL,
-            D3D_DRIVER_TYPE_HARDWARE, NULL, creationFlags, NULL, NULL,
-            D3D11_SDK_VERSION, &scd, &g->swapChain, &g->device, NULL,
-            &g->context); 
-        Checkhr(hr, __LINE__);
-
-        ////    BACK BUFFER AS RENDER TARGET, DEPTH STENCIL   ////
-        // get the address of the back buffer
-        ID3D11Texture2D* buf;
-        g->swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&buf);
-        // use the back buffer address to create the render target
-        hr = g->device->CreateRenderTargetView(buf, NULL, &g->backBuffer);
-        Checkhr(hr, __LINE__);
-        buf->Release();
-
-        //Describe our Depth/Stencil Buffer and View
-        D3D11_TEXTURE2D_DESC depthStencilDesc;
-        depthStencilDesc.Width = info->wnd->width;
-        depthStencilDesc.Height = info->wnd->height;
-        depthStencilDesc.MipLevels = 1;
-        depthStencilDesc.ArraySize = 1;
-        depthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-        depthStencilDesc.SampleDesc.Count = 1;
-        depthStencilDesc.SampleDesc.Quality = 0;
-        depthStencilDesc.Usage = D3D11_USAGE_DEFAULT;
-        depthStencilDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-        depthStencilDesc.CPUAccessFlags = 0;
-        depthStencilDesc.MiscFlags = 0;
-
-        hr = g->device->CreateTexture2D(&depthStencilDesc, NULL, &g->depthStencilBuffer);
-        Checkhr(hr, __LINE__);
-        hr = g->device->CreateDepthStencilView(g->depthStencilBuffer, NULL, &g->depthStencilView);
-        Checkhr(hr, __LINE__);
-
-        ////   VIEWPORT    ////
-        // Set the viewport
-        D3D11_VIEWPORT viewport;
-        ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
-        viewport.TopLeftX = 0;
-        viewport.TopLeftY = 0;
-        viewport.Width = (FLOAT)info->wnd->width;
-        viewport.Height = (FLOAT)info->wnd->height;
-        viewport.MinDepth = 0.0f;
-        viewport.MaxDepth = 1.0f;
-        g->context->RSSetViewports(1, &viewport);
-
-        ////    VS and PS    ////
-        g->defaultVS = CreateVertexShaderFromString(g, rc_VertexShader, "main", "vs_5_0");
-        g->context->VSSetShader(g->defaultVS, 0, 0);
-        g->defaultPS = CreatePixelShaderFromString(g, rc_PixelShader, "main", "ps_5_0");
-        g->defaultPost = CreatePixelShaderFromString(g, rc_PostProcessing, "main", "ps_5_0");
-
-        //shared vertex shader buffer
-#ifdef VI_VALIDATE
-        if (sizeof(sprite) % 16 != 0)
-        {
-            fprintf(stderr, "Sprite is not multiple of 16 bytes");
-            return;
-        }
-#endif
-        D3D11_BUFFER_DESC cbbd;
-        ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
-        cbbd.Usage = D3D11_USAGE_DEFAULT;
-        cbbd.ByteWidth = sizeof(sprite);
-        cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        cbbd.CPUAccessFlags = 0;
-        cbbd.MiscFlags = 0;
-        g->device->CreateBuffer(&cbbd, NULL, &g->bufferVS);
-        g->context->VSSetConstantBuffers(0, 1, &g->bufferVS);
-#ifdef VI_VALIDATE
-        if (sizeof(camera) % 16 != 0)
-        {
-            fprintf(stderr, "camera is not multiple of 16 bytes");
-            return;
-        }
-#endif
-        ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
-        cbbd.Usage = D3D11_USAGE_DEFAULT;
-        cbbd.ByteWidth = sizeof(camera);
-        cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-        cbbd.CPUAccessFlags = 0;
-        cbbd.MiscFlags = 0;
-        g->device->CreateBuffer(&cbbd, NULL, &g->bufferVS2);
-        g->context->VSSetConstantBuffers(1, 1, &g->bufferVS2);
-
-        D3D11_RASTERIZER_DESC rd;
-        ZeroMemory(&rd, sizeof(rd));
-        rd.FillMode = D3D11_FILL_WIREFRAME;
-        rd.CullMode = D3D11_CULL_NONE;
-        hr = g->device->CreateRasterizerState(&rd, &g->wireframe);
-        Checkhr(hr, __LINE__);
-        rd.FillMode = D3D11_FILL_SOLID;
-        rd.CullMode = D3D11_CULL_FRONT;
-        hr = g->device->CreateRasterizerState(&rd, &g->solid);
-        Checkhr(hr, __LINE__);
-
-        g->context->OMSetRenderTargets(1, &g->backBuffer, g->depthStencilView);
-        g->context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        g->context->RSSetState(g->solid);
-        g->context->PSSetShader(g->defaultPS, 0, 0);
-
-        g->point = CreateSampler(g, TextureFilter::Point);
-        g->linear = CreateSampler(g, TextureFilter::Linear);
-        g->context->PSSetSamplers(0, 1, &g->point);
-
-        //// *********** PIPELINE SETUP ENDS HERE *********** ////
-	}
-
-	void destroyGraphics(renderer* g)
-	{
-        g->defaultPS->Release();
-        g->defaultVS->Release();
-        g->swapChain->Release();
-        g->depthStencilView->Release();
-        g->depthStencilBuffer->Release();
-        g->backBuffer->Release();
-        g->device->Release();
-        g->context->Release();
-	}
-
-    // Create texture where pixels are uncompressed, not encoded, 4 bytes per pixel formatted RGBA, stored lineary.
-    // insert texture to internal storage
-    void createTextureFromBytes(texture* t, renderer* g, byte* data, uint width, uint height)
-    {
-        t->width = width;
-        t->height = height;
-
-        ID3D11Texture2D* tex = nullptr;
-        D3D11_TEXTURE2D_DESC desc;
-        D3D11_SUBRESOURCE_DATA sub;
-
-        sub.pSysMem = (void*)data;
-        sub.SysMemPitch = (UINT)width * 4;
-        sub.SysMemSlicePitch = (UINT)height * (UINT)width * 4;
-
-        desc.Width = (UINT)width;
-        desc.Height = (UINT)height;
-        desc.MipLevels = 1;
-        desc.ArraySize = 1;
-
-        desc.SampleDesc.Count = 1;
-        desc.SampleDesc.Quality = 0;
-        desc.Usage = D3D11_USAGE_DEFAULT;
-        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-        desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-        desc.CPUAccessFlags = 0;
-        desc.MiscFlags = 0;
-
-        HRESULT hr = g->device->CreateTexture2D(&desc, &sub, &tex);
-        Checkhr(hr, __LINE__);
-
-        D3D11_TEXTURE2D_DESC desc2;
-        tex->GetDesc(&desc2);
-        ID3D11ShaderResourceView* srv = nullptr;
-        hr = g->device->CreateShaderResourceView(tex, 0, &srv);
-        Checkhr(hr, __LINE__);
-        tex->Release();
-
-        t->shaderResource = srv;
-    }
-
-    // Create texture from file in memory.
-    // Difference between this and 'createTextureFromFile' is that file is in memory.
-    // It's useful because you can have PNG or other encoded image in memory
-    // and this can create texture from that. Supports lots of formats.
-    void createTextureFromInMemoryFile(texture* t, renderer* g, byte* file, int len)
-    {
-        int x = -1, y = -1, n = -1;
-        const int components = 4; // components means how many elements from 'RGBA'
-                                  // you want to return, I want 4 (RGBA) even in not all 4 are present
-        byte* data = stbi_load_from_memory(file, len, &x, &y, &n, components);
-
-#ifdef VI_VALIDATE
-        if (data == nullptr)
-        {
-            fprintf(stderr, "createTexture could not open the file\n");
-            exit(1);
-        }
-#endif
-
-        createTextureFromBytes(t, g, data, x, y);
-        stbi_image_free(data);
-    }
-
-    // Create texture from file on disk. Supports lots of formats.
-    void createTextureFromFile(texture* t, renderer* g, const char* filename)
-    {
-        int x = -1, y = -1, n = -1;
-        const int components = 4; // components means how many elements from 'RGBA'
-                                  // you want to return, I want 4 (RGBA) even in not all 4 are present
-        byte* data = stbi_load(filename, &x, &y, &n, components);
-
-#ifdef VI_VALIDATE
-        if (data == nullptr)
-        {
-            fprintf(stderr, "createTexture could not open the file\n");
-            exit(1);
-        }
-#endif
-
-        createTextureFromBytes(t, g, data, x, y);
-        stbi_image_free(data);
-    }
-
-    void destroyTexture(texture* t)
-    {
-        t->shaderResource->Release();
-    }
-
-    void beginScene(renderer* g)
-    {
-        g->context->ClearRenderTargetView(g->backBuffer, g->backBufferColor);
-        g->context->ClearDepthStencilView(g->depthStencilView,
-            D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-        g->context->UpdateSubresource(g->bufferVS2, 0, NULL, &g->camera, 0, 0);
-    }
-
-    void drawSprite(renderer* g, sprite* s, texture* t)
-    {
-        if (t != nullptr) g->context->PSSetShaderResources(0, 1, &t->shaderResource);
-        g->context->UpdateSubresource(g->bufferVS, 0, NULL, s, 0, 0);
-        g->context->Draw(6, 0);
-    }
-
-    void endScene(renderer* g)
-    {
-        g->swapChain->Present(0, 0);
-    }
-
-    // makes minimum changes to make object show when drawn
-    void initSprite(sprite* s, uint textureIndex)
-    {
-        *s = {};
-        s->s2.textureIndex = textureIndex;
-        s->s2.col = { 1,1,1 };
-        s->s2.scale = { 1,1 };
-        s->s2.uv1 = { 0,0,1,1 };
-    }
-    
-    // 'stopAfter' stop animation after that many frame changes, 0 = never stop
-    void initAnimation(animation* a, sprite* s, time::timer* t, uv* uv, uint frameCount, float secondsPerFrame, uint stopAfter)
-    {
-        a->t = t;
-        a->s = s;
-        a->uv = uv;
-        a->speed = secondsPerFrame;
-        a->frameCount = frameCount;
-        a->currentFrame = 0;
-        a->stopAfter = stopAfter;
-        a->frameChanged = false;
-        a->_elapsedTime = 0;
-        a->_playing = false;
-        a->_frameChanges = 0;
-        // update uv to the current frame
-        a->s->s2.uv1 = a->uv[a->currentFrame];
-    }
-
-	void initDynamic(dynamic* d, sprite* s, time::timer* t)
-	{
-        *d = {};
-        d->s = s;
-        d->t = t;
-        d->_lastUpdate = t->getGameTimeSec();
-	}
-
-    // make 'updateAnimation' animate frames
-    void playAnimation(animation* a)
-    {
-        if (a->_playing) return;
-
-        a->_playing = true;
-        a->_lastUpdate = a->t->getGameTimeSec();
-        // update uv to the current frame
-        a->s->s2.uv1 = { a->uv[a->currentFrame] };
-    }
-
-    // animation will stop and 'updateAnimation' will no longer animate frames
-    void pauseAnimation(animation* a)
-    {
-        a->_playing = false;
-    }
-
-    // stop and reset animation so it can be played from the beginning
-    void resetAnimation(animation* a)
-    {
-        a->currentFrame = 0;
-        a->frameChanged = false;
-        a->_elapsedTime = 0;
-        a->_playing = false;
-        a->_frameChanges = 0;
-
-    }
-
-    // stops playing 'from' starts playing 'to'
-    // if 'from' is not playing ot 'to' is playing then nothing happens
-    void switchAnimation(animation* from, animation* to)
-    {
-        if (!from->_playing || to->_playing)
-            return;
-
-        resetAnimation(from);
-        playAnimation(to);
-    }
-
-    // this is true if last 'updateAnimation' changed 'currentFrame'
-    bool animationFrameChanged(animation* a)
-    {
-        return a->frameChanged;
-    }
-
-    void animationFlipHorizontally(animation* a)
-    {
-        for (uint i = 0; i < a->frameCount; i++)
-            util::swap(a->uv[i].left, a->uv[i].right);
-    }
-
-    void animationFlipVertically(animation* a)
-    {
-        for (uint i = 0; i < a->frameCount; i++)
-            util::swap(a->uv[i].top, a->uv[i].bottom);
-    }
-
-    // current algorithm 
-    // measure how much time elapsed since last update and add it to total time elapsed
-    // if total time elapsed is greater than speed (thus measured in seconds per frame)
-    // then reduce total time elapsed by speed and change frame
-    void updateAnimation(animation* a)
-    {
-        // not playing, early break
-        if (!a->_playing)
-            return;
-
-        // set frame changed to false to invalidate previous true
-        a->frameChanged = false;
-        float gameTime = a->t->getGameTimeSec();
-        // elpased since last update
-        float elapsed = gameTime - a->_lastUpdate;
-        // update last update
-        a->_lastUpdate = gameTime;
-        // update elapsed
-        a->_elapsedTime += elapsed;
-
-        // see if enough time elapsed to change frame
-        if (a->_elapsedTime > a->speed)
-        {
-            // subtract the duration of one frame
-            a->_elapsedTime -= a->speed;
-            // update frame index including looping
-            a->currentFrame = (a->currentFrame + 1) % a->frameCount;
-            a->frameChanged = true;
-            a->_frameChanges++;
-
-            // update uv
-            uv* uv = a->uv + a->currentFrame;
-            a->s->s2.uv1 = *uv;
-
-            // enough frame changed occured so stop playing
-            if (a->stopAfter != 0 && a->_frameChanges > a->stopAfter)
-                a->_playing = false;
-        }
-    }
-
-    struct uvSplitInfo
-    {
-        uint pixelTexWidth;
-        uint pixelTexHeight;
-        uint pixelOffsetx;
-        uint pixelOffsety;
-        uint pixelFrameWidth;
-        uint pixelFrameHeight;
-        uint rowLength;
-        uint frameCount;
-    };
-
-    // utility function to calculate uv
-    // offset is where on texture to start
-    // width and height are frame size
-    // row length: in case frames on texture are stacked in multiple rows, how many frames per row are there
-    // frame count is how many uv elements to calculate
-    // uv is the destination, there must be at least as many uv elements avaiable as 'frameCount'
-    void uvSplit(uvSplitInfo* info, uv* uv)
-    {
-        const float width = (float)info->pixelFrameWidth / info->pixelTexWidth;
-        const float height = (float)info->pixelFrameHeight / info->pixelTexHeight;
-        float offsetx = (float)info->pixelOffsetx / info->pixelTexWidth;
-        float x = offsetx;
-        float y = (float)info->pixelOffsety / info->pixelTexHeight;
-
-        for (uint i = 0; i < info->frameCount; i++, uv++)
-        {
-            uv->left = x;
-            uv->top = y;
-            uv->right = x + width;
-            uv->bottom = y + height;
-
-            x += width;
-
-            if (x >= width* info->rowLength + offsetx)
+            ID3D11PixelShader* result;
+            ID3D10Blob* ps;
+            ID3D10Blob* errorMsg;
+            HRESULT hr = D3DCompile(str, strlen(str), 0, 0, 0, entryPoint, target, 0, 0, &ps, &errorMsg);
+            if (errorMsg != nullptr)
             {
-                x = offsetx;
-                y += height;
+                void* ptr = errorMsg->GetBufferPointer();
+                uint sz = errorMsg->GetBufferSize();
+                byte buffer[1000];
+                memset(buffer, 0, 1000);
+                memcpy(buffer, ptr, sz);
+                fprintf(stderr, "%s\n", buffer);
+                return nullptr;
+            }
+            else
+            {
+                this->checkhr(hr, __LINE__);
+            }
+            //D3DCompile
+            hr = this->device->CreatePixelShader(ps->GetBufferPointer(), ps->GetBufferSize(), 0, &result);
+            this->checkhr(hr, __LINE__);
+            ps->Release();
+            return result;
+        }
+
+        ID3D11VertexShader* createVertexShaderFromString(const char* str, 
+            const char* entryPoint, const char* target)
+        {
+            ID3D11VertexShader* result = nullptr;
+            ID3D10Blob* vs;
+            ID3D10Blob* errorMsg;
+            HRESULT hr = D3DCompile(str, strlen(str), 0, 0, 0, entryPoint, target, 0, 0, &vs, &errorMsg);
+
+            if (errorMsg != nullptr)
+            {
+                void* ptr = errorMsg->GetBufferPointer();
+                uint sz = errorMsg->GetBufferSize();
+                byte buffer[1000];
+                memset(buffer, 0, 1000);
+                memcpy(buffer, ptr, sz);
+                fprintf(stderr, "%s\n", buffer);
+                return nullptr;
+            }
+            else
+            {
+                this->checkhr(hr, __LINE__);
+            }
+            hr = this->device->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), 0, &result);
+            this->checkhr(hr, __LINE__);
+            vs->Release();
+            return result;
+        }
+
+        void init(rendererInfo* info)
+        {
+            HRESULT hr = 0;
+            this->window = info->wnd;
+            this->fullscreen = false;
+            //assign global variable
+            memcpy(this->backBufferColor, info->clearColor, sizeof(float) * 4);
+
+            // camera
+            this->camera.aspectRatio = this->window->width / (float)this->window->height;
+            this->camera.rotation = 0;
+            this->camera.scale = 1;
+            this->camera.x = 0;
+            this->camera.y = 0;
+
+            //// *********** PIPELINE SETUP STARTS HERE *********** ////
+            // create a struct to hold information about the swap chain
+            DXGI_SWAP_CHAIN_DESC scd;
+            ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
+            scd.BufferCount = 1;                                    // one back buffer
+            scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;     // use 32-bit color
+            scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;      // how swap chain is to be used
+            scd.OutputWindow = info->wnd->handle;                   // the window to be used
+            scd.SampleDesc.Quality = 0;
+            scd.SampleDesc.Count = 1;                               // no anti aliasing
+            scd.Windowed = TRUE;                                    // windowed/full-screen mode
+            //scd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;   // alternative fullscreen mode
+
+            UINT creationFlags = D3D11_CREATE_DEVICE_SINGLETHREADED;
+
+            ////    DEVICE, DEVICE CONTEXT AND SWAP CHAIN    ////
+            hr = D3D11CreateDeviceAndSwapChain(NULL,
+                D3D_DRIVER_TYPE_HARDWARE, NULL, creationFlags, NULL, NULL,
+                D3D11_SDK_VERSION, &scd, &this->swapChain, &this->device, NULL,
+                &this->context);
+            this->checkhr(hr, __LINE__);
+
+            ////    BACK BUFFER AS RENDER TARGET, DEPTH STENCIL   ////
+            // get the address of the back buffer
+            ID3D11Texture2D* buf;
+            this->swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&buf);
+            // use the back buffer address to create the render target
+            hr = this->device->CreateRenderTargetView(buf, NULL, &this->backBuffer);
+            this->checkhr(hr, __LINE__);
+            buf->Release();
+
+            //Describe our Depth/Stencil Buffer and View
+            D3D11_TEXTURE2D_DESC depthStencilDesc;
+            depthStencilDesc.Width = info->wnd->width;
+            depthStencilDesc.Height = info->wnd->height;
+            depthStencilDesc.MipLevels = 1;
+            depthStencilDesc.ArraySize = 1;
+            depthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+            depthStencilDesc.SampleDesc.Count = 1;
+            depthStencilDesc.SampleDesc.Quality = 0;
+            depthStencilDesc.Usage = D3D11_USAGE_DEFAULT;
+            depthStencilDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+            depthStencilDesc.CPUAccessFlags = 0;
+            depthStencilDesc.MiscFlags = 0;
+
+            hr = this->device->CreateTexture2D(&depthStencilDesc, NULL, &this->depthStencilBuffer);
+            this->checkhr(hr, __LINE__);
+            hr = this->device->CreateDepthStencilView(this->depthStencilBuffer, NULL, &this->depthStencilView);
+            this->checkhr(hr, __LINE__);
+
+            ////   VIEWPORT    ////
+            // Set the viewport
+            D3D11_VIEWPORT viewport;
+            ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
+            viewport.TopLeftX = 0;
+            viewport.TopLeftY = 0;
+            viewport.Width = (FLOAT)info->wnd->width;
+            viewport.Height = (FLOAT)info->wnd->height;
+            viewport.MinDepth = 0.0f;
+            viewport.MaxDepth = 1.0f;
+            this->context->RSSetViewports(1, &viewport);
+
+            ////    VS and PS    ////
+            this->defaultVS = this->createVertexShaderFromString(rc_VertexShader, "main", "vs_5_0");
+            this->context->VSSetShader(this->defaultVS, 0, 0);
+            this->defaultPS = this->createPixelShaderFromString(rc_PixelShader, "main", "ps_5_0");
+            this->defaultPost = this->createPixelShaderFromString(rc_PostProcessing, "main", "ps_5_0");
+
+            //shared vertex shader buffer
+#ifdef VI_VALIDATE
+            if (sizeof(sprite) % 16 != 0)
+            {
+                fprintf(stderr, "Sprite is not multiple of 16 bytes");
+                return;
+            }
+#endif
+            D3D11_BUFFER_DESC cbbd;
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = sizeof(sprite);
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            cbbd.CPUAccessFlags = 0;
+            cbbd.MiscFlags = 0;
+            this->device->CreateBuffer(&cbbd, NULL, &this->bufferVS);
+            this->context->VSSetConstantBuffers(0, 1, &this->bufferVS);
+#ifdef VI_VALIDATE
+            if (sizeof(camera) % 16 != 0)
+            {
+                fprintf(stderr, "camera is not multiple of 16 bytes");
+                return;
+            }
+#endif
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = sizeof(camera);
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            cbbd.CPUAccessFlags = 0;
+            cbbd.MiscFlags = 0;
+            this->device->CreateBuffer(&cbbd, NULL, &this->bufferVS2);
+            this->context->VSSetConstantBuffers(1, 1, &this->bufferVS2);
+
+            D3D11_RASTERIZER_DESC rd;
+            ZeroMemory(&rd, sizeof(rd));
+            rd.FillMode = D3D11_FILL_WIREFRAME;
+            rd.CullMode = D3D11_CULL_NONE;
+            hr = this->device->CreateRasterizerState(&rd, &this->wireframe);
+            this->checkhr(hr, __LINE__);
+            rd.FillMode = D3D11_FILL_SOLID;
+            rd.CullMode = D3D11_CULL_FRONT;
+            hr = this->device->CreateRasterizerState(&rd, &this->solid);
+            this->checkhr(hr, __LINE__);
+
+            this->context->OMSetRenderTargets(1, &this->backBuffer, this->depthStencilView);
+            this->context->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            this->context->RSSetState(this->solid);
+            this->context->PSSetShader(this->defaultPS, 0, 0);
+
+            this->point = this->createSampler(TextureFilter::Point);
+            this->linear = this->createSampler(TextureFilter::Linear);
+            this->context->PSSetSamplers(0, 1, &this->point);
+
+            //// *********** PIPELINE SETUP ENDS HERE *********** ////
+        }
+
+        void destroy()
+        {
+            this->bufferVS->Release();
+            this->bufferVS = nullptr;
+            this->bufferVS2->Release();
+            this->bufferVS2 = nullptr;
+            this->point->Release();
+            this->point = nullptr;
+            this->linear->Release();
+            this->linear = nullptr;
+            this->wireframe->Release();
+            this->wireframe = nullptr;
+            this->solid->Release();
+            this->solid = nullptr;
+            this->defaultPost->Release();
+            this->defaultPost = nullptr;
+            this->defaultPS->Release();
+            this->defaultPS = nullptr;
+            this->defaultVS->Release();
+            this->defaultVS = nullptr;
+            this->depthStencilView->Release();
+            this->depthStencilView = nullptr;
+            this->depthStencilBuffer->Release();
+            this->depthStencilBuffer = nullptr;
+            this->backBuffer->Release();
+            this->backBuffer = nullptr;
+            this->swapChain->Release();
+            this->swapChain = nullptr;
+            this->context->Release();
+            this->context = nullptr;
+            this->device->Release();
+            this->device = nullptr;
+        }
+
+        // Create texture where pixels are uncompressed, not encoded, 4 bytes per pixel formatted RGBA, stored lineary.
+        // insert texture to internal storage
+        void createTextureFromBytes(texture* t, byte* data, uint width, uint height)
+        {
+            t->width = width;
+            t->height = height;
+
+            ID3D11Texture2D* tex = nullptr;
+            D3D11_TEXTURE2D_DESC desc;
+            D3D11_SUBRESOURCE_DATA sub;
+
+            sub.pSysMem = (void*)data;
+            sub.SysMemPitch = (UINT)width * 4;
+            sub.SysMemSlicePitch = (UINT)height * (UINT)width * 4;
+
+            desc.Width = (UINT)width;
+            desc.Height = (UINT)height;
+            desc.MipLevels = 1;
+            desc.ArraySize = 1;
+
+            desc.SampleDesc.Count = 1;
+            desc.SampleDesc.Quality = 0;
+            desc.Usage = D3D11_USAGE_DEFAULT;
+            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+            desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+            desc.CPUAccessFlags = 0;
+            desc.MiscFlags = 0;
+
+            HRESULT hr = this->device->CreateTexture2D(&desc, &sub, &tex);
+            this->checkhr(hr, __LINE__);
+
+            D3D11_TEXTURE2D_DESC desc2;
+            tex->GetDesc(&desc2);
+            ID3D11ShaderResourceView* srv = nullptr;
+            hr = this->device->CreateShaderResourceView(tex, 0, &srv);
+            this->checkhr(hr, __LINE__);
+            tex->Release();
+
+            t->shaderResource = srv;
+        }
+
+        // Create texture from file in memory.
+        // Difference between this and 'createTextureFromFile' is that file is in memory.
+        // It's useful because you can have PNG or other encoded image in memory
+        // and this can create texture from that. Supports lots of formats.
+        void createTextureFromInMemoryFile(texture* t, renderer* g, byte* file, int len)
+        {
+            int x = -1, y = -1, n = -1;
+            const int components = 4; // components means how many elements from 'RGBA'
+                                      // you want to return, I want 4 (RGBA) even in not all 4 are present
+            byte* data = stbi_load_from_memory(file, len, &x, &y, &n, components);
+
+#ifdef VI_VALIDATE
+            if (data == nullptr)
+            {
+                fprintf(stderr, "createTexture could not open the file\n");
+                exit(1);
+            }
+#endif
+
+            this->createTextureFromBytes(t, data, x, y);
+            stbi_image_free(data);
+        }
+
+        // Create texture from file on disk. Supports lots of formats.
+        void createTextureFromFile(texture* t, const char* filename)
+        {
+            int x = -1, y = -1, n = -1;
+            const int components = 4; // components means how many elements from 'RGBA'
+                                      // you want to return, I want 4 (RGBA) even in not all 4 are present
+            byte* data = stbi_load(filename, &x, &y, &n, components);
+
+#ifdef VI_VALIDATE
+            if (data == nullptr)
+            {
+                fprintf(stderr, "createTexture could not open the file\n");
+                exit(1);
+            }
+#endif
+
+            this->createTextureFromBytes(t, data, x, y);
+            stbi_image_free(data);
+        }
+
+        void destroyTexture(texture* t)
+        {
+            t->shaderResource->Release();
+            t->shaderResource = nullptr;
+        }
+
+        void beginScene()
+        {
+            this->context->ClearRenderTargetView(this->backBuffer, this->backBufferColor);
+            this->context->ClearDepthStencilView(this->depthStencilView,
+                D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+            this->context->UpdateSubresource(this->bufferVS2, 0, NULL, &this->camera, 0, 0);
+        }
+
+        void drawSprite(sprite* s, texture* t)
+        {
+            if (t != nullptr) this->context->PSSetShaderResources(0, 1, &t->shaderResource);
+            this->context->UpdateSubresource(this->bufferVS, 0, NULL, s, 0, 0);
+            this->context->Draw(6, 0);
+        }
+
+        void endScene()
+        {
+            this->swapChain->Present(0, 0);
+        }
+
+        // utility function to calculate uv
+        // offset is where on texture to start
+        // width and height are frame size
+        // row length: in case frames on texture are stacked in multiple rows, how many frames per row are there
+        // frame count is how many uv elements to calculate
+        // uv is the destination, there must be at least as many uv elements avaiable as 'frameCount'
+        void uvSplit(uvSplitInfo* info, uv* uv)
+        {
+            const float width = (float)info->pixelFrameWidth / info->pixelTexWidth;
+            const float height = (float)info->pixelFrameHeight / info->pixelTexHeight;
+            float offsetx = (float)info->pixelOffsetx / info->pixelTexWidth;
+            float x = offsetx;
+            float y = (float)info->pixelOffsety / info->pixelTexHeight;
+
+            for (uint i = 0; i < info->frameCount; i++, uv++)
+            {
+                uv->left = x;
+                uv->top = y;
+                uv->right = x + width;
+                uv->bottom = y + height;
+
+                x += width;
+
+                if (x >= width * info->rowLength + offsetx)
+                {
+                    x = offsetx;
+                    y += height;
+                }
             }
         }
-    }    
 
-    void updateDynamicSprite(dynamic* d)
-    {
-        float currentTime = d->t->getGameTimeSec();
-        float delta = currentTime - d->_lastUpdate;
-        d->_lastUpdate = currentTime;
+        // 'pixelWidth' and 'pixelHeight' are dimensions in pixel
+        void setPixelScale(sprite* s, uint pixelWidth, uint pixelHeight)
+        {
+            s->s1.sx = 2.0f / this->window->width / this->camera.scale * pixelWidth * this->camera.aspectRatio;
+            s->s1.sy = 2.0f / this->window->height / this->camera.scale * pixelHeight;
+        }
 
-        d->velx += d->accx * delta;
-        d->s->s1.x += d->velx * delta;
-        d->vely += d->accy * delta;
-        d->s->s1.y += d->vely * delta;
-        d->velz += d->accz * delta;
-        d->s->s1.z += d->velz * delta;
-        d->velrot += d->accrot * delta;
-        d->s->s1.rot += d->velrot * delta;
-        d->velsx += d->accsx * delta;
-        d->s->s1.sx += d->velsx * delta;
-        d->velsy += d->accsy * delta;
-        d->s->s1.sy += d->velsy * delta;
-    }
+        // 'pixelx' and 'pixely' are window coordinates in pixels (0,0) is in upper left corner
+        void setScreenPos(sprite* s, uint pixelx, uint pixely)
+        {
+            s->s1.x = 2.0f / this->window->width * (pixelx - this->window->width / 2.0f) / this->camera.scale * this->camera.aspectRatio;
+            s->s1.y = 2.0f / this->window->height * (pixely - this->window->height / 2.0f) / this->camera.scale;
+        }
 
-    // 'pixelWidth' and 'pixelHeight' are dimensions in pixel
-    void setPixelScale(renderer* g, uint pixelWidth, uint pixelHeight, float* sx, float* sy)
-    {
-        *sx = 2.0f / g->window->width / g->camera.scale * pixelWidth * g->camera.aspectRatio;
-        *sy = 2.0f / g->window->height / g->camera.scale * pixelHeight;
-    }
+        // puts width and height in world coordinates of 1px in f[0] and f[1]
+        void getPixelScale(float* f)
+        {
+            f[0] = 2.0f / this->window->width / this->camera.scale * this->camera.aspectRatio;
+            f[1] = 2.0f / this->window->height / this->camera.scale;
+        }
 
-    // 'pixelx' and 'pixely' are window coordinates in pixels (0,0) is in upper left corner
-    void setScreenPos(renderer* g, uint pixelx, uint pixely, float* x, float* y)
-    {
-        *x = 2.0f / g->window->width * (pixelx - g->window->width / 2.0f) / g->camera.scale * g->camera.aspectRatio;
-        *y = 2.0f / g->window->height * (pixely - g->window->height / 2.0f) / g->camera.scale;
-    }
-
-    // puts width and height in world coordinates of 1px in f[0] and f[1]
-    void getPixelScale(renderer* g, float* f)
-    {
-        f[0] = 2.0f / g->window->width / g->camera.scale * g->camera.aspectRatio;
-        f[1] = 2.0f / g->window->height / g->camera.scale;
-    }
-
-    // utli function that will calc uv coords if you know pixel coords
-    void setUvFromPixels(float pixelOffsetX, float pixelOffsetY, float pixelWidth,
-        float pixelHeight, float pixelTextureWidth, float pixelTextureHeight, uv* uv1)
-    {
-        uv1->left = pixelOffsetX / pixelTextureWidth;
-        uv1->top = pixelOffsetY / pixelTextureHeight;
-        uv1->right = uv1->left + pixelWidth / pixelTextureWidth;
-        uv1->bottom = uv1->top + pixelHeight / pixelTextureHeight;
-    }
+        // utli function that will calc uv coords if you know pixel coords
+        void setUvFromPixels(sprite* s, float pixelOffsetX, float pixelOffsetY, float pixelWidth,
+            float pixelHeight, float pixelTextureWidth, float pixelTextureHeight)
+        {
+            s->s1.left = pixelOffsetX / pixelTextureWidth;
+            s->s1.top = pixelOffsetY / pixelTextureHeight;
+            s->s1.right = s->s1.left + pixelWidth / pixelTextureWidth;
+            s->s1.bottom = s->s1.top + pixelHeight / pixelTextureHeight;
+        }
+    };    
 }
 
 namespace vi::input
@@ -2190,29 +2198,33 @@ namespace vi::res
     struct resources
     {
         memory::alloctrack* a;
-        std::vector<gl::texture> textures;
-        std::vector<gl::font> fonts;
+        std::vector<gl::texture*> textures;
+        std::vector<gl::font*> fonts;
         std::vector<gl::sprite*> sprites;
         std::vector<gl::animation*> animations;
         std::vector<gl::text*> texts;
         std::vector<gl::dynamic*> dynamics;
         std::vector<fn::routine*> routines;
 
-        resources() { this->a == nullptr; }
+        resources() 
+        { 
+            this->a = nullptr; 
+        }
 
         gl::texture* addTexture()
         {
             uint index = this->textures.size();
-            this->textures.push_back({});
-            this->textures[index].index = index;
-            return this->textures.data() + index;
+            gl::texture* t = this->a->alloc<gl::texture>(1);
+            t->index = index;
+            this->textures.push_back(t);
+            return t;
         }
 
         gl::font* addFont()
         {
-            uint index = this->fonts.size();
-            this->fonts.push_back({});
-            return this->fonts.data() + index;
+            gl::font* f = this->a->alloc<gl::font>(1);
+            this->fonts.push_back(f);
+            return f;
         }
 
         gl::animation* addAnimation()
@@ -2252,6 +2264,10 @@ namespace vi::res
 
         void free()
         {
+            for (uint i = 0; i < this->textures.size(); i++) this->a->free(this->textures[i]); 
+            this->textures.clear();
+            for (uint i = 0; i < this->fonts.size(); i++) this->a->free(this->fonts[i]);
+            this->fonts.clear();
             for (uint i = 0; i < this->animations.size(); i++) this->a->free(this->animations[i]);
             this->animations.clear();
             for (uint i = 0; i < this->dynamics.size(); i++) this->a->free(this->dynamics[i]);
@@ -2304,7 +2320,7 @@ namespace vi
             system::initWindow(&wInfo, &this->window);
             this->keyboard.init();
             this->mouse.init();
-            gl::graphicsInit(&rInfo, &this->graphics);
+            this->graphics.init(&rInfo);
             this->timer.init();
 
             // if queue capacity is not set then set it to 1
@@ -2320,12 +2336,15 @@ namespace vi
 
         void destroy()
         {
+            for (uint i = 0; i < this->resources.textures.size(); i++)
+                this->graphics.destroyTexture(this->resources.textures[i]);
+
             this->resources.free();
 #ifdef VI_VALIDATE
             this->alloctrack.report();
 #endif // VI_VALIDATE
 
-            gl::destroyGraphics(&this->graphics);
+            this->graphics.destroy();
             system::destroyWindow(&this->window);
         }
 
@@ -2340,24 +2359,22 @@ namespace vi
                 userLoop();
 
                 for (uint i = 0; i < this->resources.animations.size(); i++)
-                    gl::updateAnimation(this->resources.animations[i]);
+                    this->resources.animations[i]->update();
                 for (uint i = 0; i < this->resources.dynamics.size(); i++)
-                    gl::updateDynamicSprite(this->resources.dynamics[i]);
+                    this->resources.dynamics[i]->update();
                 
-                gl::beginScene(&this->graphics);
+                this->graphics.beginScene();
                 for (uint i = 0; i < this->resources.sprites.size(); i++)
                 {
                     gl::sprite* s = this->resources.sprites[i];
                     gl::texture* t = s->s1.textureIndex < vi::gl::TEXTURE_BLANK ? 
-                        this->resources.textures.data() + s->s1.textureIndex : nullptr;
-                    gl::drawSprite(&this->graphics, s, t);
+                        this->resources.textures[s->s1.textureIndex] : nullptr;
+                    this->graphics.drawSprite(s, t);
                 }
-                gl::endScene(&this->graphics);
+                this->graphics.endScene();
             }
         }
     };
-
-    
 }
 
 #endif
