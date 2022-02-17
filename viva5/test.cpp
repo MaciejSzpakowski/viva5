@@ -17,7 +17,7 @@ namespace examples
 
     void performance()
     {
-        const uint count = 10000;
+        const uint count = 2000;
         vi::vivaInfo info;
         vi::viva v;
         info.width = 960;
@@ -33,7 +33,7 @@ namespace examples
         for (uint i = 0; i < count; i++)
         {
             vi::gl::sprite* s = v.resources.addSprite();
-            s->init(t->index);
+            s->init(t);
             v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
             v.graphics.setPixelScale(s, 6*2, 13*2);
             s->s1.rot = rng.rnd() * 2.0f * 3.1415926f;
@@ -352,197 +352,185 @@ namespace examples
 
         vi::graphics::destroyTexture(&data.v.graphics, data.tex);
         data.v.destroy();
-    }
+    }*/
 
     /// <summary>
     /// Typing test
     /// </summary>
     void typing()
     {
-        gameData data;
         char str[1000];
         memset(str, 0, 1000);
         sprintf(str, "Type something_");
         uint len = strlen(str) - 1;
 
-        auto loop = [&](uint i)
-        {
-            data.v.keyboard.update();
-
-            if (data.v.keyboard.isKeyPressed(vi::input::BACKSPACE) && len > 0)
-            {
-                str[--len] = 0;
-                strcat(str, "_");
-                data.t[0].update();
-            }
-            else if (data.v.keyboard.isKeyPressed(vi::input::ENTER) && len < 900)
-            {
-                str[len++] = '\n';
-                strcat(str, "_");
-                data.t[0].update();
-            }
-            // there is no glyph for tab
-            else if (data.v.keyboard.typedKey != 0 && len < 900 &&
-                data.v.keyboard.typedKey != '\t')
-            {
-                str[len++] = data.v.keyboard.typedKey;
-                strcat(str, "_");
-                data.t[0].update();
-            }
-
-            vi::graphics::drawScene(&data.v.graphics, data.sprites, 256, &data.v.camera);
-        };
-
+        vi::viva v;
         vi::vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Typing";
-        data.v.init(&info);
+        v.init(&info);
 
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/font1.png", data.tex);
-        vi::graphics::pushTextures(&data.v.graphics, data.tex, 1);
+        vi::gl::texture* t = v.resources.addTexture();
+        vi::gl::font* f = v.resources.addFont();
+        vi::gl::text* text = v.resources.addText();
+        vi::gl::sprite* s = v.resources.addSprite(1000);
+        v.graphics.createTextureFromFile(t, "textures/font1.png");
 
-        vi::graphics::font font1 = { data.tex };
-        vi::graphics::uvSplitInfo usi = { 256,36,0,0,8,12,32,96 };
-        vi::graphics::uvSplit(&usi, font1.uv);
+        f->tex = t;
+        vi::gl::uvSplitInfo usi = { 256,36,0,0,8,12,32,96 };
+        v.graphics.uvSplit(&usi, f->uv);
 
-        data.t[0] = { &font1, data.sprites, str, 0, 0 };
-        data.sprites[0].s2.pos = { -1, -0.75f };
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 16, 24,
-            &data.sprites[0].s1.sx, &data.sprites[0].s1.sy);
-        vi::graphics::setScreenPos(&data.v.graphics, &data.v.camera, 20, 20,
-            &data.sprites[0].s1.x, &data.sprites[0].s1.y);
-        data.t[0].update();
+        text->init(f, s, 1000, str);
 
-        vi::system::loop<uint>(loop, 0);
+        s[0].s2.pos = { -1, -0.75f };
+        v.graphics.setPixelScale(s, 16, 24);
+        v.graphics.setScreenPos(s, 20, 20);
+        text->update();
 
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        data.v.destroy();
+        auto loop = [&]()
+        {
+            if (v.keyboard.isKeyPressed(vi::input::BACKSPACE) && len > 0)
+            {
+                str[--len] = 0;
+                strcat(str, "_");
+                text->update();
+            }
+            else if (v.keyboard.isKeyPressed(vi::input::ENTER) && len < 900)
+            {
+                str[len++] = '\n';
+                strcat(str, "_");
+                text->update();
+            }
+            // there is no glyph for tab
+            else if (v.keyboard.typedKey != 0 && len < 900 && v.keyboard.typedKey != '\t')
+            {
+                str[len++] = v.keyboard.typedKey;
+                strcat(str, "_");
+                text->update();
+            }
+        };
+
+        v.loop(loop);
+
+        v.destroy();
     }
 
     // display virtual key codes of keys that are down
     // some keys cause more than one code to be true (like shift,ctrl and alt)
     void inputState()
     {
-        gameData data;
-        char str[1000];
-
-        auto loop = [&](uint i)
-        {
-            data.v.keyboard.update();
-
-            sprintf(str, "Press key(s) to show codes\n");
-            for (int i = 0, c = 0; c < 256; c++)
-            {
-                if (data.v.keyboard.isKeyDown(c))
-                    sprintf(str + strlen(str), "%d ", c);
-            }
-
-            data.t[0].update();
-
-            vi::graphics::drawScene(&data.v.graphics, data.sprites, 256, &data.v.camera);
-        };
+        char str[1000];        
 
         vi::vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Input state";
-        data.v.init(&info);
+        vi::viva v;
+        v.init(&info);
 
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/font1.png", data.tex);
-        vi::graphics::pushTextures(&data.v.graphics, data.tex, 1);
+        vi::gl::texture* t = v.resources.addTexture();
+        v.graphics.createTextureFromFile(t, "textures/font1.png");
         
-        vi::graphics::font font1 = { data.tex };
-        vi::graphics::uvSplitInfo usi = { 256,36,0,0,8,12,32,96 };
-        vi::graphics::uvSplit(&usi, font1.uv);
+        vi::gl::font* f = v.resources.addFont();
+        f->tex = t;
+        vi::gl::uvSplitInfo usi = { 256,36,0,0,8,12,32,96 };
+        v.graphics.uvSplit(&usi, f->uv);
 
-        data.t[0] = { &font1, data.sprites, str, 0, 0 };
-        data.sprites[0].s2.pos = { -1, -0.75f };
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 16, 24,
-            &data.sprites[0].s1.sx, &data.sprites[0].s1.sy);
-        vi::graphics::setScreenPos(&data.v.graphics, &data.v.camera, 20, 20, 
-            &data.sprites[0].s1.x, &data.sprites[0].s1.y);
-        data.t[0].update();
+        vi::gl::sprite* s = v.resources.addSprite(1000);
+        vi::gl::text* text = v.resources.addText();
+        text->init(f, s, 1000, str);
+        s[0].s2.pos = { -1, -0.75f };
+        v.graphics.setPixelScale(s, 16, 24);
+        v.graphics.setScreenPos(s, 20, 20);
+        text->update();
 
-        vi::system::loop<uint>(loop, 0);
+        auto loop = [&]()
+        {
+            sprintf(str, "Press key(s) to show codes\n");
+            for (int i = 0, c = 0; c < 256; c++)
+            {
+                if (v.keyboard.isKeyDown(c))
+                    sprintf(str + strlen(str), "%d ", c);
+            }
 
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        data.v.destroy();
+            text->update();
+        };
+
+        v.loop(loop);
+
+        v.destroy();
     }
 
     void text()
     {
-        gameData data;
+        vi::viva v;
         bool flag = false;
-        char str[300];
+        const uint capacity = 300;
+        char str[capacity];
         const char* cstr = "Some text that\ncontains new line characters.\nEach glyph is just a sprite and\n"
             "can be manipulated individually.\nPress space to toggle";
-        const char* extra = "\n more stuff";
-        auto loop = [&](uint i)
-        {
-            vi::graphics::drawScene(&data.v.graphics, data.sprites, 1000, &data.v.camera);
-            data.v.keyboard.update();
-            if (data.v.keyboard.isKeyPressed(vi::input::SPACE) && !flag)
-            {
-                flag = true;
-                uint len = strlen(str);
-                memcpy(str + len, extra, strlen(extra));
-                data.t[0].update();
-
-            }
-            else if(data.v.keyboard.isKeyPressed(vi::input::SPACE) && flag)
-            {
-                flag = false;
-                str[strlen(cstr)] = 0;
-                data.t[0].update();
-            }
-        };
+        const char* extra = "\n more stuff";        
 
         vi::vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Text";
-        data.v.init(&info);
+        v.init(&info);
 
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/font1.png", data.tex);
-        vi::graphics::pushTextures(&data.v.graphics, data.tex, 1);
-                
+        vi::gl::texture* t = v.resources.addTexture();
+        v.graphics.createTextureFromFile(t, "textures/font1.png");
+        
         memcpy(str, cstr, strlen(cstr) + 1);
         // font is a simple object that combines texture and uv for glyphs together
-        vi::graphics::font font1;
-        font1.init(data.tex);
-        vi::graphics::uvSplitInfo usi = {256,36,0,0,8,12,32,96};
-        vi::graphics::uvSplit(&usi, font1.uv);
+        vi::gl::font* f = v.resources.addFont();
+        f->tex = t;
+        vi::gl::uvSplitInfo usi = {256,36,0,0,8,12,32,96};
+        v.graphics.uvSplit(&usi, f->uv);
 
         // INIT TEXT
         // set position, scale, origin of the first sprite and others will have
         // the same scale and origin and will be advanced starting from that first one's position
-        data.t[0] = { &font1, data.sprites, str, 0, 0 };
-        data.sprites[0].s2.pos = { -1, -0.5f };
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 16, 24, 
-            &data.sprites[0].s1.sx, &data.sprites[0].s1.sy);
+        vi::gl::sprite* s = v.resources.addSprite(capacity);
+        vi::gl::text* text = v.resources.addText();
+        // init does minimum initialization so text will appear
+        text->init(f, s, capacity, str);
 
-        // 'updateText(text*)' is really util function to set sprites to look like text
-        data.t[0].update();
+        s[0].s2.pos = { -1, -0.5f };
+        v.graphics.setPixelScale(s, 16, 24);
 
-        // set all glyphs to be black
-        // texture is white so col can be used directly to set text color
-        uint len1 = strlen(str);
-        for (uint i = 0; i < len1; i++)
-            data.sprites[i].s2.col = { 0,0,0 };
+        // 'vi::gl::text.updateText()' is really a util function to set sprites to look like text
+        text->update();
 
         // find where 'individually' starts and color it red
         const char* ptr = strstr(str, "individually");
         // subtract 3 because new line characters dont have corresponding sprites
-        uint index = ptr - str - 3;
+        uint index = ptr - str;
         uint len2 = strlen("individually");
-        for (uint i = index; i < index + len2; i++) data.sprites[i].s2.col = { 1,0,0 };
+        for (uint i = index; i < index + len2; i++) s[i].s2.col = { 1,0,0 };
         
-        vi::system::loop<uint>(loop, 0);
+        auto loop = [&]()
+        {
+            if (v.keyboard.isKeyPressed(vi::input::SPACE) && !flag)
+            {
+                flag = true;
+                uint len = strlen(str);
+                memcpy(str + len, extra, strlen(extra));
+                text->update();
 
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        data.v.destroy();
-    }*/
+            }
+            else if (v.keyboard.isKeyPressed(vi::input::SPACE) && flag)
+            {
+                flag = false;
+                str[strlen(cstr)] = 0;
+                text->update();
+            }
+        };
+
+        v.loop(loop);
+
+        v.destroy();
+    }
 
     // move camera with WSAD zoom Q/E
     // zooming should be towards the center of the screen
@@ -560,31 +548,31 @@ namespace examples
         v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
 
         vi::gl::sprite* s1 = v.resources.addSprite();
-        s1->init(t->index);
+        s1->init(t);
         s1->s2.pos = { -1,-1 };
         v.graphics.setUvFromPixels(s1, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
         v.graphics.setPixelScale(s1, 6 * 10, 13 * 10);
 
         vi::gl::sprite* s2 = v.resources.addSprite();
-        s2->init(t->index);
+        s2->init(t);
         s2->s2.pos = { 1,-1 };
         v.graphics.setUvFromPixels(s2, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
         v.graphics.setPixelScale(s2, 6 * 10, 13 * 10);
 
         vi::gl::sprite* s3 = v.resources.addSprite();
-        s3->init(t->index);
+        s3->init(t);
         s3->s2.pos = { -1,1 };
         v.graphics.setUvFromPixels(s3, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
         v.graphics.setPixelScale(s3, 6 * 10, 13 * 10);
 
         vi::gl::sprite* s4 = v.resources.addSprite();
-        s4->init(t->index);
+        s4->init(t);
         s4->s2.pos = { 1,1 };
         v.graphics.setUvFromPixels(s4, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
         v.graphics.setPixelScale(s4, 6 * 10, 13 * 10);
 
         vi::gl::sprite* s5 = v.resources.addSprite();
-        s5->init(t->index);
+        s5->init(t);
         v.graphics.setUvFromPixels(s5, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
         v.graphics.setPixelScale(s5, 6 * 10, 13 * 10);
 
@@ -626,13 +614,13 @@ namespace examples
         v.graphics.createTextureFromFile(t3, "textures/sm.png");
 
         vi::gl::sprite* s1 = v.resources.addSprite();
-        s1->init(t1->index);
+        s1->init(t1);
         s1->s2.pos = { -1,1 };
         vi::gl::sprite* s2 = v.resources.addSprite();
-        s2->init(t2->index);
+        s2->init(t2);
         s2->s2.pos = { -1,-1 };
         vi::gl::sprite* s3 = v.resources.addSprite();
-        s3->init(t3->index);
+        s3->init(t3);
         s3->s2.pos = { 1,-1 };
 
         v.loop(empty);
@@ -674,7 +662,7 @@ namespace examples
         elf.s = v.resources.addSprite();
         elf.walk = v.resources.addAnimation();
         elf.idle = v.resources.addAnimation();
-        elf.s->init(t->index);
+        elf.s->init(t);
         v.graphics.setPixelScale(elf.s, 16 * 4, 28 * 4);
         vi::gl::uvSplitInfo usi1 = { 512,512,192,4,16,28,4,4 };
         v.graphics.uvSplit(&usi1, elf.walkUv);
@@ -695,7 +683,7 @@ namespace examples
             vi::gl::animation* walk;
         } monster;
         monster.s = v.resources.addSprite();
-        monster.s->init(t->index);
+        monster.s->init(t);
         monster.s->s1.x = 1;
         v.graphics.setPixelScale(monster.s, 16 * 4, 20 * 4);
         monster.d = v.resources.addDynamic();
@@ -711,7 +699,7 @@ namespace examples
         monster.idle->play();
 
         vi::gl::sprite* knife = v.resources.addSprite();
-        knife->init(t->index);
+        knife->init(t);
         knife->s1.x = -1;
         v.graphics.setPixelScale(knife, 8 * 4, 19 * 4);
         v.graphics.setUvFromPixels(knife, 310, 124, 8, 19, 512, 512);
@@ -836,7 +824,7 @@ namespace examples
         v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
 
 #define MAKE_SPRITE(__x,__y,__rot,__sx,__sy,__r,__g,__b) { vi::gl::sprite* s = v.resources.addSprite(); \
-        s->init(t->index); \
+        s->init(t); \
         v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f); \
         s->s2.col = {__r,__g,__b}; \
         s->s2.pos = {__x,__y}; \
@@ -857,7 +845,7 @@ namespace examples
 
         // init sprite for animation
         vi::gl::sprite* elf = v.resources.addSprite();
-        elf->init(t->index);
+        elf->init(t);
         elf->s2.pos = { 4,2 };
         v.graphics.setPixelScale(elf, 16 * 4, 28 * 4);
         // init uv for animation using convenience function
@@ -907,12 +895,12 @@ namespace examples
 
 #define MAKE_SPRITE(__x,__y,__rot,__sx,__sy,__r,__g,__b) { \
         vi::gl::sprite* s = v.resources.addSprite(); \
+        s->init(t); \
         v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f); \
         s->s2.col = {__r,__g,__b}; \
         s->s2.pos = {__x,__y}; \
         s->s2.rot = __rot; \
         s->s2.origin = {0,0}; \
-        s->s2.textureIndex = t->index; \
         v.graphics.setPixelScale(s, 6 * __sx, 13 * __sy); }
 
         // different scales
@@ -977,18 +965,19 @@ namespace examples
         g.createTextureFromFile(&t, "textures/0x72_DungeonTilesetII_v1.png");
         t.index = 0;
         vi::gl::sprite s;
-        s.init(t.index);
+        s.init(&t);
         g.setUvFromPixels(&s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
         g.setPixelScale(&s, 6 * 10, 13 * 10);
         vi::gl::sprite blank;
-        blank.init(vi::gl::TEXTURE_BLANK);
+        blank.init(nullptr);
+        blank.s1.flags = vi::gl::SPR_TEXTURE_BLANK;
         blank.s2.col = { 0.5f,1.0f,0 };
 
         while (vi::system::updateWindow(&wnd))
         {
             g.beginScene();
-            g.drawSprite(&s, &t);
-            g.drawSprite(&blank, nullptr);
+            g.drawSprite(&s);
+            g.drawSprite(&blank);
             g.endScene();
         }
 
@@ -1025,7 +1014,7 @@ namespace examples
         // "sx,sy" is scale, use something other than 0,0 because it means that sprite is infinitely small
         // "r,g,b" are color coefficients, texel is multiplied by them so use 1,1,1 if you want to use texel as it is
         vi::gl::sprite* s = v.resources.addSprite();
-        s->init(t->index);
+        s->init(t);
         v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
 
         // in this case, object on the texture is 6x13 pixels
@@ -1034,7 +1023,8 @@ namespace examples
 
         // add blank sprite (no texture required, just set index to vi::gl::TEXTURE_BLANK)
         vi::gl::sprite* blank = v.resources.addSprite();
-        blank->init(vi::gl::TEXTURE_BLANK);
+        blank->init(nullptr);
+        blank->s1.flags = vi::gl::SPR_TEXTURE_BLANK;
         blank->s2.col = { 0.5f,1.0f,0 };
 
         v.loop(empty);
@@ -1044,21 +1034,21 @@ namespace examples
 
     int main()
     {
-        basicSpriteNoViva();
-        basicSprite();
-        moreSprites();
-        timerMotionAnimation();
-        performance();
-        keyboardMultipleAnimationsMath();
-        multipleTextures();
-        camera();
-        /*text();
+        //basicSpriteNoViva();
+        //basicSprite();
+        //moreSprites();
+        //timerMotionAnimation();
+        //performance();
+        //keyboardMultipleAnimationsMath();
+        //multipleTextures();
+        //camera();
+        text();
         inputState();
         typing();
-        mouseAndFixedSprite();
-        zindex();
-        queue();
-        network();*/
+        //mouseAndFixedSprite();
+        //zindex();
+        //queue();
+        //network();
 
         return 0;
     }

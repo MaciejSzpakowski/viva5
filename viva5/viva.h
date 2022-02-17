@@ -187,6 +187,12 @@ namespace vi::util
         memset(dst, 0, sizeof(T));
     }
 
+    template<typename T>
+    void zeron(T* dst, uint len)
+    {
+        memset(dst, 0, sizeof(T) * len);
+    }
+
 	struct rng
 	{
 		std::mt19937 mt;
@@ -613,9 +619,8 @@ namespace vi::system
 // d3d11
 namespace vi::gl
 {
-    const uint TEXTURE_INVISIBLE = 999999;
-    const uint TEXTURE_BLANK = 999998;
-
+    const uint SPR_TEXTURE_INVISIBLE = 1;
+    const uint SPR_TEXTURE_BLANK = 2;
     const char rc_PixelShader[] = R"(
 Texture2D textures[1];
 SamplerState ObjSamplerState;
@@ -683,8 +688,8 @@ struct sprite
     float ox,oy;
     float4 uv;
     float r,g,b;
-    uint textureIndex;
-    bool fixed;
+    uint flags;
+    float4 padding;
 };
 
 struct camera
@@ -701,7 +706,7 @@ cbuffer jedziemy
 	sprite spr;
 };
 
-cbuffer poziomo
+cbuffer poziolo
 {
 	camera camObj;
 };
@@ -787,8 +792,8 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 	output.Pos = mul(mul(mul(mul(mul(cam,loc), rot), sca), ori), pos);
     output.Pos.z = spr.z;
 	output.Col = float4(spr.r, spr.g, spr.b, 1);
-    if(spr.textureIndex == 999999) output.Col.a = 0.0f;
-    else if(spr.textureIndex == 999998) output.Col.a = 0.5f;
+    if(spr.flags & 1) output.Col.a = 0.0f;
+    else if(spr.flags & 2) output.Col.a = 0.5f;
     int u = uv[vid].x;
     int v = uv[vid].y;
     output.TexCoord = float2(spr.uv[u],spr.uv[v]);
@@ -806,13 +811,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         float scale;
         // padding because this struct must be multiple of 16bytes
         byte padding[12];
-    };
-
-    struct renderTarget
-    {
-        ID3D11Texture2D* texture;
-        ID3D11RenderTargetView* rtv;
-    };    
+    }; 
 
     struct vector3
     {
@@ -834,9 +833,17 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         float left, top, right, bottom;
     };
 
+    struct texture
+    {
+        int index;
+        int width;
+        int height;
+        ID3D11ShaderResourceView* shaderResource;
+    };
+
     // WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // you updating something ? update shaders as well
-    // struct passed to uniform buffer must be multiple of 16bytes
+    // struct passed to uniform buffer must be multiple of 16bytes    
     struct sprite1
     {
         // pos x
@@ -871,19 +878,21 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         float bottom;
 
         // 16 byte
+
         // color red
         float r;
         // color green
         float g;
         // color blue
         float b;
+        // some extra settings
+        uint flags;
 
-        uint textureIndex;
+        // 16 byte
 
-        // move with camera or fixed to viewport
-        bool fixed;
+        texture* t;
         // padding because this truct must be multiple of 16bytes
-        byte padding[15];
+        byte padding[8];
     };
 
     struct sprite2
@@ -894,19 +903,23 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         vector2 origin;
         uv uv1;
         color col;
-        uint textureIndex;
+        uint flags;
+        texture* t;
+        byte padding[8];
     };
 
+    // 16 bytes alignment, although I'm not sure it's necessary
+    _declspec(align(16))
     union sprite
     {
         sprite1 s1;
         sprite2 s2;
 
         // makes minimum changes to make object show when drawn
-        void init(uint textureIndex)
+        void init(texture* t)
         {
             vi::util::zero(this);
-            this->s2.textureIndex = textureIndex;
+            this->s1.t = t;
             this->s2.col = { 1,1,1 };
             this->s2.scale = { 1,1 };
             this->s2.uv1 = { 0,0,1,1 };
@@ -958,14 +971,6 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         }
     };
 
-    struct texture
-    {
-        int index;
-        int width;
-        int height;
-        ID3D11ShaderResourceView* shaderResource;
-    };
-
     // for now speed must be non negative
     struct animation
     {
@@ -998,6 +1003,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             this->_elapsedTime = 0;
             this->_playing = false;
             this->_frameChanges = 0;
+            this->_lastUpdate = 0;
             // update uv to the current frame
             this->s->s2.uv1 = this->u[this->currentFrame];
         }
@@ -1101,54 +1107,76 @@ VS_OUTPUT main(uint vid : SV_VertexID)
     {
         font* f;
         sprite* s;
+        uint capacity;
         const char* str;
         float horizontalSpace;
         float verticalSpace;
-        sprite* last;
+
+        void init(font* f, sprite* s, uint capacity, const char* str)
+        {
+#ifdef VI_VALIDATE
+            if (f == nullptr || s == nullptr || capacity < 1 || str == nullptr)
+            {
+                fprintf(stderr, "%s invalid argument\n", __func__);
+                return;
+            }
+
+            if (f->tex == nullptr)
+            {
+                fprintf(stderr, "%s font has not texture\n", __func__);
+                return;
+            }
+#endif
+
+            this->f = f;
+            this->s = s;
+            this->capacity = capacity;
+            this->str = str;
+            this->verticalSpace = 0;
+            this->horizontalSpace = 0;
+
+            for (uint i = 0; i < capacity; i++)
+            {
+                vi::util::zero(s + i);
+                s[i].init(f->tex);
+                s[i].s2.col = { 0,0,0 };
+            }
+        }
 
         void update()
         {
-            const char* it = this->str;
-            sprite* s = this->s;
-            uv* uv1 = this->f->uv;
             float x = s->s1.x;
             float y = s->s1.y;
-            uint textureIndex = this->f->tex->index;
 
-            while (true)
+            bool zero = false;
+            for (uint i = 0; i < this->capacity; i++)
             {
-                // iterate untill null terminating character
-                if (*it == 0)
-                    break;
+                if (!zero && this->str[i] == 0) zero = true;
 
-                if (*it == '\n')
-                {
-                    x = this->s->s1.x;
-                    y += this->s->s1.sy + this->verticalSpace;
-                    it++;
-                    continue;
+                if (zero) 
+                { 
+                    this->s[i].s1.flags |= gl::SPR_TEXTURE_INVISIBLE;
                 }
+                else if(this->str[i] == '\n')
+                {
+                    x = this->s[0].s1.x;
+                    y += this->s[0].s1.sy + this->verticalSpace;
+                    this->s[i].s1.flags |= gl::SPR_TEXTURE_INVISIBLE;
+                    this->s[i].s2.scale = { 0,0 };
+                }
+                else
+                {
+                    this->s[i].s2.uv1 = this->f->uv[str[i] - ' '];
+                    this->s[i].s1.x = x;
+                    this->s[i].s1.y = y;
+                    // set scale and origin equal to the first sprite in the set
+                    this->s[i].s2.scale = this->s[0].s2.scale;
+                    this->s[i].s2.origin = this->s[0].s2.origin;
+                    this->s[i].s1.flags &= ~gl::SPR_TEXTURE_INVISIBLE;
 
-                s->s2.uv1 = uv1[*it - ' '];
-                s->s1.x = x;
-                s->s1.y = y;
-                s->s1.textureIndex = textureIndex;
-                // set scale and origin equal to the first sprite in the set
-                s->s2.scale = this->s->s2.scale;
-                s->s2.origin = this->s->s2.origin;
-
-                it++;
-                s++;
-                x += this->s->s1.sx + this->horizontalSpace;
+                    x += this->s[0].s1.sx + this->horizontalSpace;
+                }
             }
-
-            // if old text was longer then there will be sprites still drawn after the new text
-            // zero them out
-            if (this->last != nullptr)
-            {
-                for (; s < this->last; s++) s->s1.textureIndex = TEXTURE_INVISIBLE;
-            }
-            this->last = s;
         }
     };
 
@@ -1188,8 +1216,8 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         ID3D11RasterizerState* solid;
         ID3D11SamplerState* point;
         ID3D11SamplerState* linear;
-        ID3D11Buffer* bufferVS;
-        ID3D11Buffer* bufferVS2;
+        ID3D11Buffer* cbufferVS;
+        ID3D11Buffer* cbufferVScamera;
         camera camera;
         float backBufferColor[4];
         double frequency;
@@ -1365,7 +1393,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             this->defaultPS = this->createPixelShaderFromString(rc_PixelShader, "main", "ps_5_0");
             this->defaultPost = this->createPixelShaderFromString(rc_PostProcessing, "main", "ps_5_0");
 
-            //shared vertex shader buffer
+            // vertex buffer for single instace i.e. UpdateSubresource
 #ifdef VI_VALIDATE
             if (sizeof(sprite) % 16 != 0)
             {
@@ -1378,10 +1406,8 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             cbbd.Usage = D3D11_USAGE_DEFAULT;
             cbbd.ByteWidth = sizeof(sprite);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-            cbbd.CPUAccessFlags = 0;
-            cbbd.MiscFlags = 0;
-            this->device->CreateBuffer(&cbbd, NULL, &this->bufferVS);
-            this->context->VSSetConstantBuffers(0, 1, &this->bufferVS);
+            this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVS);
+            this->context->VSSetConstantBuffers(0, 1, &this->cbufferVS);
 #ifdef VI_VALIDATE
             if (sizeof(camera) % 16 != 0)
             {
@@ -1389,14 +1415,13 @@ VS_OUTPUT main(uint vid : SV_VertexID)
                 return;
             }
 #endif
+            // vertex buffer for camera also UpdateSubresource
             ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
             cbbd.ByteWidth = sizeof(camera);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-            cbbd.CPUAccessFlags = 0;
-            cbbd.MiscFlags = 0;
-            this->device->CreateBuffer(&cbbd, NULL, &this->bufferVS2);
-            this->context->VSSetConstantBuffers(1, 1, &this->bufferVS2);
+            this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVScamera);
+            this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
 
             D3D11_RASTERIZER_DESC rd;
             ZeroMemory(&rd, sizeof(rd));
@@ -1423,10 +1448,10 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 
         void destroy()
         {
-            this->bufferVS->Release();
-            this->bufferVS = nullptr;
-            this->bufferVS2->Release();
-            this->bufferVS2 = nullptr;
+            this->cbufferVS->Release();
+            this->cbufferVS = nullptr;
+            this->cbufferVScamera->Release();
+            this->cbufferVScamera = nullptr;
             this->point->Release();
             this->point = nullptr;
             this->linear->Release();
@@ -1551,13 +1576,15 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             this->context->ClearRenderTargetView(this->backBuffer, this->backBufferColor);
             this->context->ClearDepthStencilView(this->depthStencilView,
                 D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-            this->context->UpdateSubresource(this->bufferVS2, 0, NULL, &this->camera, 0, 0);
+            // update camera only once per frame
+            this->context->UpdateSubresource(this->cbufferVScamera, 0, NULL, &this->camera, 0, 0);
         }
 
-        void drawSprite(sprite* s, texture* t)
+        void drawSprite(sprite* s)
         {
-            if (t != nullptr) this->context->PSSetShaderResources(0, 1, &t->shaderResource);
-            this->context->UpdateSubresource(this->bufferVS, 0, NULL, s, 0, 0);
+            if (s->s1.flags & gl::SPR_TEXTURE_INVISIBLE) return;
+            if (s->s1.t != nullptr) this->context->PSSetShaderResources(0, 1, &s->s1.t->shaderResource);
+            this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
             this->context->Draw(6, 0);
         }
 
@@ -2193,11 +2220,11 @@ namespace vi::fn
     };
 }
 
-namespace vi::res
+namespace vi
 {
     struct resources
     {
-        memory::alloctrack* a;
+        memory::alloctrack a;
         std::vector<gl::texture*> textures;
         std::vector<gl::font*> fonts;
         std::vector<gl::sprite*> sprites;
@@ -2206,15 +2233,11 @@ namespace vi::res
         std::vector<gl::dynamic*> dynamics;
         std::vector<fn::routine*> routines;
 
-        resources() 
-        { 
-            this->a = nullptr; 
-        }
-
         gl::texture* addTexture()
         {
             uint index = this->textures.size();
-            gl::texture* t = this->a->alloc<gl::texture>(1);
+            gl::texture* t = this->a.alloc<gl::texture>(1);
+            util::zero(t);
             t->index = index;
             this->textures.push_back(t);
             return t;
@@ -2222,68 +2245,72 @@ namespace vi::res
 
         gl::font* addFont()
         {
-            gl::font* f = this->a->alloc<gl::font>(1);
+            gl::font* f = this->a.alloc<gl::font>(1);
+            util::zero(f);
             this->fonts.push_back(f);
             return f;
         }
 
         gl::animation* addAnimation()
         {
-            gl::animation* a = this->a->alloc<gl::animation>(1);
+            gl::animation* a = this->a.alloc<gl::animation>(1);
+            util::zero(a);
             this->animations.push_back(a);
             return a;
         }
 
         gl::text* addText()
         {
-            gl::text* t = this->a->alloc<gl::text>(1);
+            gl::text* t = this->a.alloc<gl::text>(1);
+            util::zero(t);
             this->texts.push_back(t);
             return t;
         }
 
         gl::dynamic* addDynamic()
         {
-            gl::dynamic* d = this->a->alloc<gl::dynamic>(1);
+            gl::dynamic* d = this->a.alloc<gl::dynamic>(1);
+            util::zero(d);
             this->dynamics.push_back(d);
             return d;
         }
 
         gl::sprite* addSprite()
         {
-            gl::sprite* s = this->a->alloc<gl::sprite>(1);
-            this->sprites.push_back(s);
+            return this->addSprite(1);
+        }
+
+        gl::sprite* addSprite(uint len)
+        {
+            gl::sprite* s = this->a.alloc<gl::sprite>(len);
+            util::zeron(s, len);
+            for (uint i = 0; i < len; i++) this->sprites.push_back(s + i);
             return s;
         }
 
         fn::routine* addRoutine()
         {
-            fn::routine* r = this->a->alloc<fn::routine>(1);
+            fn::routine* r = this->a.alloc<fn::routine>(1);
+            util::zero(r);
             this->routines.push_back(r);
             return r;
         }
 
         void free()
         {
-            for (uint i = 0; i < this->textures.size(); i++) this->a->free(this->textures[i]); 
             this->textures.clear();
-            for (uint i = 0; i < this->fonts.size(); i++) this->a->free(this->fonts[i]);
             this->fonts.clear();
-            for (uint i = 0; i < this->animations.size(); i++) this->a->free(this->animations[i]);
             this->animations.clear();
-            for (uint i = 0; i < this->dynamics.size(); i++) this->a->free(this->dynamics[i]);
             this->dynamics.clear();
-            for (uint i = 0; i < this->routines.size(); i++) this->a->free(this->routines[i]);
             this->routines.clear();
-            for (uint i = 0; i < this->sprites.size(); i++) this->a->free(this->sprites[i]);
             this->sprites.clear();
-            for (uint i = 0; i < this->texts.size(); i++) this->a->free(this->texts[i]);
             this->texts.clear();
+            for (uint i = 0; i < this->a.allocations.size(); i++)
+                this->a.free(this->a.allocations[i]);
+            this->a.allocations.clear();
         }
     };
-}
 
-namespace vi
-{
     struct vivaInfo
     {
         uint width;
@@ -2301,7 +2328,7 @@ namespace vi
         memory::alloctrack alloctrack;
         time::timer timer;
         fn::queue queue;
-        res::resources resources;
+        resources resources;
 
         void init(vivaInfo* info)
         {
@@ -2327,7 +2354,6 @@ namespace vi
             if (info->queueCapacity == 0) info->queueCapacity = 1;
 
             this->queue.init(&this->timer);
-            this->resources.a = &this->alloctrack;
 
 #ifdef VI_VALIDATE
             this->alloctrack.track = true;
@@ -2366,10 +2392,8 @@ namespace vi
                 this->graphics.beginScene();
                 for (uint i = 0; i < this->resources.sprites.size(); i++)
                 {
-                    gl::sprite* s = this->resources.sprites[i];
-                    gl::texture* t = s->s1.textureIndex < vi::gl::TEXTURE_BLANK ? 
-                        this->resources.textures[s->s1.textureIndex] : nullptr;
-                    this->graphics.drawSprite(s, t);
+                    gl::sprite* s = this->resources.sprites[i];                    
+                    this->graphics.drawSprite(s);
                 }
                 this->graphics.endScene();
             }
