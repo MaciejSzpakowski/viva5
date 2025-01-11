@@ -1793,7 +1793,6 @@ VS_OUTPUT main(VertexInputType data)
             UINT stride = sizeof(vertex);
             UINT offset = 0;
             this->context->IASetVertexBuffers(0, 1, &m->vertexBuffer, &stride, &offset);
-            this->context->IASetIndexBuffer(m->indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
             if (this->drawingSprites)
             {
@@ -1805,7 +1804,16 @@ VS_OUTPUT main(VertexInputType data)
 
             if (m->t != nullptr) this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
             this->context->UpdateSubresource(this->world, 0, NULL, &m->x, 0, 0);
-            this->context->DrawIndexed(m->indexCount, 0, 0);
+
+            if (m->indexBuffer)
+            {
+                this->context->IASetIndexBuffer(m->indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+                this->context->DrawIndexed(m->indexCount, 0, 0);
+            }
+            else
+            {
+                this->context->Draw(m->vertexCount / 3, 0);
+            }
         }
 
         void endScene()
