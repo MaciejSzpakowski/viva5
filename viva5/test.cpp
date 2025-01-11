@@ -1,7 +1,5 @@
 #define VIVA_IMPL
 #define VI_VALIDATE
-#define VI_VULKAN_H "c:/VulkanSDK/1.1.108.0/Include/vulkan/vulkan.h"
-#define VI_VULKAN_LIB "C:/VulkanSDK/1.1.108.0/Lib/vulkan-1.lib"
 #include "viva.h"
 
 namespace examples
