@@ -103,12 +103,12 @@ namespace examples
         server.destroyServer();
         // uninit network in windows
         vi::net::uninitNetwork();
-    }
+    }*/
 
     // top chest will blink from start
     // middle chest will start blinking after 5s
     // bottom chest will stop blinking after 5s
-    void queue()
+    /*void queue()
     {
         gameData data;
 
@@ -177,7 +177,7 @@ namespace examples
 
         vi::graphics::destroyTexture(&data.v.graphics, data.tex);
         data.v.destroy();
-    }
+    }*/
         
     /// <summary>
     /// layer sprites based on z coordinate
@@ -187,7 +187,7 @@ namespace examples
     /// Here, upper sprites should be all above lower sprites
     /// so they are layered independently from order.
     /// </summary>
-    void zindex()
+    /*void zindex()
     {
         auto loop = [](gameData* _gameData)
         {
@@ -221,7 +221,7 @@ namespace examples
 
         vi::graphics::destroyTexture(&data.v.graphics, data.tex);
         data.v.destroy();
-    }
+    }*/
 
     // get some cursor data
     // left click and mouse move to move square
@@ -230,7 +230,7 @@ namespace examples
     // move camera with WSAD zoom Q/E
     // fixed sprite wont be affected by camera transform
     // it will behave like camera was at 0,0 and scale 1
-    void mouseAndFixedSprite()
+    /*void mouseAndFixedSprite()
     {
         gameData data;
 
@@ -986,6 +986,98 @@ namespace examples
         vi::system::destroyWindow(&wnd);
     }
 
+    void mesh()
+    {
+        vi::system::windowInfo winfo = {};
+        winfo.width = 500;
+        winfo.height = 500;
+        winfo.title = "Cube";
+        vi::system::window wnd;
+        vi::system::initWindow(&winfo, &wnd);
+        vi::gl::rendererInfo ginfo = {};
+        ginfo.wnd = &wnd;
+        ginfo.clearColor[0] = 0;
+        ginfo.clearColor[1] = 0;
+        ginfo.clearColor[2] = 1;
+        ginfo.clearColor[3] = 1;
+        vi::gl::renderer g;
+        g.init(&ginfo);
+        vi::time::timer timer;
+        timer.init();
+
+        vi::gl::camera3D cam3d =
+        { 1,1,0.001f,1000.0f };
+        g.camera3Dptr = &cam3d;
+
+        vi::gl::texture t = {};
+        g.createTextureFromFile(&t, "textures/b.png");
+        vi::gl::mesh m = {};
+        m.t = &t;
+        m.z = 5;
+        m.vertexCount = 24;
+        m.indexCount = 36;
+        vi::gl::vertex v[] = {
+           {-1.0f, -1.0f, -1.0f, 0.0f, 1.0f},
+           {-1.0f,  1.0f, -1.0f, 0.0f, 0.0f},
+           {1.0f,  1.0f, -1.0f, 1.0f, 0.0f},
+           {1.0f, -1.0f, -1.0f, 1.0f, 1.0f},
+           {-1.0f, -1.0f, 1.0f, 1.0f, 1.0f},
+           {1.0f, -1.0f, 1.0f, 0.0f, 1.0f},
+           {1.0f,  1.0f, 1.0f, 0.0f, 0.0f},
+           {-1.0f,  1.0f, 1.0f, 1.0f, 0.0f},
+           {-1.0f, 1.0f, -1.0f, 0.0f, 1.0f},
+           {-1.0f, 1.0f,  1.0f, 0.0f, 0.0f},
+           {1.0f, 1.0f,  1.0f, 1.0f, 0.0f},
+           {1.0f, 1.0f, -1.0f, 1.0f, 1.0f},
+           {-1.0f, -1.0f, -1.0f, 1.0f, 1.0f},
+           {1.0f, -1.0f, -1.0f, 0.0f, 1.0f},
+           {1.0f, -1.0f,  1.0f, 0.0f, 0.0f},
+           {-1.0f, -1.0f,  1.0f, 1.0f, 0.0f},
+           {-1.0f, -1.0f,  1.0f, 0.0f, 1.0f},
+           {-1.0f,  1.0f,  1.0f, 0.0f, 0.0f},
+           {-1.0f,  1.0f, -1.0f, 1.0f, 0.0f},
+           {-1.0f, -1.0f, -1.0f, 1.0f, 1.0f},
+           {1.0f, -1.0f, -1.0f, 0.0f, 1.0f},
+           {1.0f,  1.0f, -1.0f, 0.0f, 0.0f},
+           {1.0f,  1.0f,  1.0f, 1.0f, 0.0f},
+           {1.0f, -1.0f,  1.0f, 1.0f, 1.0f},
+        };
+        uint index[] = { // Front Face
+            2,1,0,
+            3,2,0,
+            6,5,4,
+            7,6,4,
+            10,9,8,
+            11,10,8,
+            14,13,12,
+            15,14,12,
+            18,17,16,
+            19,18,16,
+            22,21,20,
+            23,22,20
+        };
+        m.v = v;
+        m.index = index;
+        g.initMesh(&m);
+
+        while (vi::system::updateWindow(&wnd))
+        {
+            timer.update();
+
+            g.beginScene();
+            m.r1 = timer.getGameTimeSec();
+            m.r2 = timer.getGameTimeSec();
+            //m.r3 = timer.getGameTimeSec();
+            g.drawMesh(&m);
+            g.endScene();
+        }
+
+        //g.destroyTexture(&t);
+        g.destroyMesh(&m);
+        g.destroy();
+        vi::system::destroyWindow(&wnd);
+    }
+
     // most basic example if you want to see something on the screen
     void basicSprite()
     {
@@ -1034,6 +1126,7 @@ namespace examples
 
     int main()
     {
+        mesh();
         basicSpriteNoViva();
         basicSprite();
         moreSprites();

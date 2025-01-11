@@ -4,18 +4,6 @@
 // IMPORTANT, can compile only in x64
 //#define VIVA_IMPL to use the code, otherwise only prototypes and declarations will be used
 
-// #define VI_VULKAN_H for where vulkan.h file is
-// #define VI_VULKAN_LIB for where vulkan.lib is
-#ifndef VI_VULKAN_H
-#define VI_VULKAN_H <vulkan.h>
-#endif
-
-#ifndef VI_VULKAN_LIB
-#define VI_VULKAN_LIB "vulkan.lib"
-#endif
-
-// uses '#pragma comment(lib' to use vulkan.lib for linking
-
 // error checking
 // #define VI_VALIDATE yet another error checking category
 
@@ -802,6 +790,102 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 }
 )";
 
+const char rc_VertexShaderMesh[] = R"(
+struct VertexInputType
+{
+    float3 pos : POSITION;
+    float2 TexCoord : TEXCOORD;
+    float3 light : LIGHT;
+};
+
+struct world
+{
+    float x,y,z;
+    float q1,q2,q3,q4;
+    float sx,sy,sz;
+};
+
+struct view
+{
+    float aspectRatio,fovy,near,far;
+};
+
+struct proj
+{
+    float a;
+};
+
+cbuffer jedziemy
+{
+	world w;
+};
+
+cbuffer po
+{
+	view v;
+};
+
+cbuffer ziolo
+{
+	proj p;
+};
+
+struct VS_OUTPUT
+{
+	float4 Pos : SV_POSITION;
+	float4 Col : COLOR;
+	float2 TexCoord : TEXCOORD;
+};
+
+VS_OUTPUT main(VertexInputType data)
+{
+    float cr = cos(w.q1 * 0.5);
+    float sr = sin(w.q1 * 0.5);
+    float cp = cos(w.q2 * 0.5);
+    float sp = sin(w.q2 * 0.5);
+    float cy = cos(w.q3 * 0.5);
+    float sy = sin(w.q4 * 0.5);
+    float qw = cr * cp * cy + sr * sp * sy;
+    float qx = sr * cp * cy - cr * sp * sy;
+    float qy = cr * sp * cy + sr * cp * sy;
+    float qz = cr * cp * sy - sr * sp * cy;
+
+    float4x4 rotMat = {
+        qw*qw+qx*qx-qy*qy-qz*qz, 2*(qx*qy-qw*qz), 2*(qw*qy+qx*qz),0,
+        2*(qx*qy+qw*qz),qw*qw-qx*qx+qy*qy-qz*qz,2*(qy*qz-qw*qx),0,
+        2*(qx*qz-qw*qy),2*(qw*qx+qy*qz),qw*qw-qx*qx-qy*qy+qz*qz,0,
+        0,0,0,1
+    };
+
+    float4x4 locMat = {
+            1,0,0, w.x,
+            0,1,0, w.y,
+            0,0,1, w.z,
+            0,0,0, 1,
+        };
+    float4x4 worldMat = mul(locMat, rotMat);
+
+    // left handed
+    float h = 1/tan(v.fovy*0.5);
+    float4x4 projMat = {
+        h/v.aspectRatio, 0, 0, 0,
+        0, h, 0, 0,
+        0, 0, v.far/(v.far-v.near), (-v.near*v.far)/(v.far-v.near),
+        0, 0, 1, 0
+    };
+
+	float4 pos = float4(data.pos.x,data.pos.y,data.pos.z,1.0f);
+
+	VS_OUTPUT output;
+	output.Pos = mul(mul(projMat, worldMat),pos);
+	//output.Pos = mul(worldMat,pos);
+	output.Col = float4(1,1,1,1);
+	output.TexCoord = float2(data.TexCoord[0],data.TexCoord[1]);
+
+	return output;
+}
+)";
+
     struct camera
     {
         float aspectRatio;
@@ -811,7 +895,17 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         float scale;
         // padding because this struct must be multiple of 16bytes
         byte padding[12];
-    }; 
+    };
+
+    struct camera3D
+    {
+        float aspectRatio;
+        float fovy;
+        float znear;
+        float zfar;
+        // padding because this struct must be multiple of 16bytes
+        //byte padding[12];
+    };
 
     struct vector3
     {
@@ -1180,6 +1274,35 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         }
     };
 
+    struct vertex
+    {
+        float x, y, z;
+        float u, v;
+        /// <summary>
+        /// light information
+        /// </summary>
+        float r, g, b;
+    };
+
+    struct mesh
+    {
+        vertex* v;
+        /// <summary>
+        /// vertex order for index buffer
+        /// </summary>
+        uint* index;
+        uint vertexCount;
+        uint indexCount;
+        texture* t;
+        ID3D11Buffer* vertexBuffer;
+        ID3D11Buffer* indexBuffer;
+
+        float x, y, z;
+        float r1, r2, r3;
+        float sx, sy, sz;
+        float padding[3];
+    };
+
     struct rendererInfo
     {
         system::window* wnd;
@@ -1208,17 +1331,23 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         ID3D11Device* device;
         ID3D11DeviceContext* context;
         ID3D11VertexShader* defaultVS;
+        ID3D11VertexShader* defaultMeshVS;
         ID3D11PixelShader* defaultPS;
         ID3D11PixelShader* defaultPost;
         ID3D11DepthStencilView* depthStencilView;
         ID3D11Texture2D* depthStencilBuffer;
+        ID3D11InputLayout* inputLayout;
         ID3D11RasterizerState* wireframe;
         ID3D11RasterizerState* solid;
         ID3D11SamplerState* point;
         ID3D11SamplerState* linear;
         ID3D11Buffer* cbufferVS;
         ID3D11Buffer* cbufferVScamera;
+        ID3D11Buffer* world;
+        ID3D11Buffer* view;
+        ID3D11Buffer* proj;
         camera camera;
+        camera3D* camera3Dptr;
         float backBufferColor[4];
         double frequency;
         long long startTime;
@@ -1226,6 +1355,10 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         double gameTime;
         double frameTime;
         bool fullscreen;
+        /// <summary>
+        /// 
+        /// </summary>
+        bool drawingSprites;
 
         void checkhr(HRESULT hr, int line)
         {
@@ -1283,7 +1416,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         }
 
         ID3D11VertexShader* createVertexShaderFromString(const char* str, 
-            const char* entryPoint, const char* target)
+            const char* entryPoint, const char* target, bool setInputLayout)
         {
             ID3D11VertexShader* result = nullptr;
             ID3D10Blob* vs;
@@ -1304,6 +1437,26 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             {
                 this->checkhr(hr, __LINE__);
             }
+
+            if (setInputLayout)
+            {
+                //// VERTEX LAYOUT ////
+            //The vertex Structure
+            //The input-layout description
+                D3D11_INPUT_ELEMENT_DESC layout[] =
+                {
+                    {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                    {"TEXCOORD",    0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                    {"LIGHT",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                };
+                hr = this->device->CreateInputLayout(layout, 3, vs->GetBufferPointer(),
+                    vs->GetBufferSize(), &this->inputLayout);
+                this->checkhr(hr, __LINE__);
+
+                //Set the Input Layout
+                this->context->IASetInputLayout(this->inputLayout);
+            }
+
             hr = this->device->CreateVertexShader(vs->GetBufferPointer(), vs->GetBufferSize(), 0, &result);
             this->checkhr(hr, __LINE__);
             vs->Release();
@@ -1313,12 +1466,14 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         void init(rendererInfo* info)
         {
             HRESULT hr = 0;
+            this->drawingSprites = true;
             this->window = info->wnd;
             this->fullscreen = false;
             //assign global variable
             memcpy(this->backBufferColor, info->clearColor, sizeof(float) * 4);
 
             // camera
+            this->camera3Dptr = nullptr;
             this->camera.aspectRatio = this->window->width / (float)this->window->height;
             this->camera.rotation = 0;
             this->camera.scale = 1;
@@ -1388,8 +1543,10 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             this->context->RSSetViewports(1, &viewport);
 
             ////    VS and PS    ////
-            this->defaultVS = this->createVertexShaderFromString(rc_VertexShader, "main", "vs_5_0");
-            this->context->VSSetShader(this->defaultVS, 0, 0);
+            this->defaultVS = this->createVertexShaderFromString(rc_VertexShader, "main", "vs_5_0", false);
+            this->defaultMeshVS = this->createVertexShaderFromString(rc_VertexShaderMesh, "main", "vs_5_0", true);
+            // now there is separate vs for sprite and for mesh so set it every draw call
+            //this->context->VSSetShader(this->defaultVS, 0, 0);
             this->defaultPS = this->createPixelShaderFromString(rc_PixelShader, "main", "ps_5_0");
             this->defaultPost = this->createPixelShaderFromString(rc_PostProcessing, "main", "ps_5_0");
 
@@ -1407,7 +1564,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             cbbd.ByteWidth = sizeof(sprite);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVS);
-            this->context->VSSetConstantBuffers(0, 1, &this->cbufferVS);
+            
 #ifdef VI_VALIDATE
             if (sizeof(camera) % 16 != 0)
             {
@@ -1421,7 +1578,32 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             cbbd.ByteWidth = sizeof(camera);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVScamera);
-            this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
+            
+
+            // vs cbuffer for world view proj
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = 48;
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            this->device->CreateBuffer(&cbbd, NULL, &this->world);
+
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = sizeof(camera3D);
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            this->device->CreateBuffer(&cbbd, NULL, &this->view);
+
+            /*ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = sizeof(camera);
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVScamera);
+
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = sizeof(camera);
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVScamera);*/
 
             D3D11_RASTERIZER_DESC rd;
             ZeroMemory(&rd, sizeof(rd));
@@ -1443,11 +1625,18 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             this->linear = this->createSampler(TextureFilter::Linear);
             this->context->PSSetSamplers(0, 1, &this->point);
 
+            // default is drawing sprites so set them
+            this->context->VSSetShader(this->defaultVS, 0, 0);
+            this->context->VSSetConstantBuffers(0, 1, &this->cbufferVS);
+            this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
+
             //// *********** PIPELINE SETUP ENDS HERE *********** ////
         }
 
         void destroy()
         {
+            this->inputLayout->Release();
+            this->inputLayout = nullptr;
             this->cbufferVS->Release();
             this->cbufferVS = nullptr;
             this->cbufferVScamera->Release();
@@ -1578,14 +1767,45 @@ VS_OUTPUT main(uint vid : SV_VertexID)
                 D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
             // update camera only once per frame
             this->context->UpdateSubresource(this->cbufferVScamera, 0, NULL, &this->camera, 0, 0);
+            if(this->camera3Dptr)
+                this->context->UpdateSubresource(this->view, 0, NULL, this->camera3Dptr, 0, 0);
         }
 
         void drawSprite(sprite* s)
         {
             if (s->s1.flags & gl::SPR_TEXTURE_INVISIBLE) return;
+
+            if (!this->drawingSprites)
+            {
+                this->drawingSprites = true;
+                this->context->VSSetShader(this->defaultVS, 0, 0);
+                this->context->VSSetConstantBuffers(0, 1, &this->cbufferVS);
+                this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
+            }
+
             if (s->s1.t != nullptr) this->context->PSSetShaderResources(0, 1, &s->s1.t->shaderResource);
             this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
             this->context->Draw(6, 0);
+        }
+
+        void drawMesh(mesh* m)
+        {
+            UINT stride = sizeof(vertex);
+            UINT offset = 0;
+            this->context->IASetVertexBuffers(0, 1, &m->vertexBuffer, &stride, &offset);
+            this->context->IASetIndexBuffer(m->indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+
+            if (this->drawingSprites)
+            {
+                this->drawingSprites = false;
+                this->context->VSSetShader(this->defaultMeshVS, 0, 0);
+                this->context->VSSetConstantBuffers(0, 1, &this->world);
+                this->context->VSSetConstantBuffers(1, 1, &this->view);
+            }
+
+            if (m->t != nullptr) this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
+            this->context->UpdateSubresource(this->world, 0, NULL, &m->x, 0, 0);
+            this->context->DrawIndexed(m->indexCount, 0, 0);
         }
 
         void endScene()
@@ -1654,7 +1874,55 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             s->s1.right = s->s1.left + pixelWidth / pixelTextureWidth;
             s->s1.bottom = s->s1.top + pixelHeight / pixelTextureHeight;
         }
-    };    
+
+        /// <summary>
+        /// mesh will be drawn as triangle list so index count should be multiple of 3
+        /// </summary>
+        void initMesh(mesh* m)
+        {
+            D3D11_BUFFER_DESC vertexBufferDesc = {};
+
+            vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+            vertexBufferDesc.ByteWidth = sizeof(vertex) * m->vertexCount;
+            vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+            D3D11_SUBRESOURCE_DATA vertexBufferData = {};
+            vertexBufferData.pSysMem = m->v;
+
+            HRESULT hr = this->device->CreateBuffer(&vertexBufferDesc, &vertexBufferData, &m->vertexBuffer);
+            checkhr(hr, __LINE__);
+
+            D3D11_BUFFER_DESC indexBufferDesc = {};
+
+            indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+            indexBufferDesc.ByteWidth = sizeof(uint) * m->indexCount;
+            indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+            D3D11_SUBRESOURCE_DATA iinitData = {};
+            iinitData.pSysMem = m->index;
+
+            hr = this->device->CreateBuffer(&indexBufferDesc, &iinitData, &m->indexBuffer);
+            checkhr(hr, __LINE__);
+        }
+
+        void setWireframe()
+        {
+            this->context->RSSetState(this->wireframe);
+        }
+
+        void setSolid()
+        {
+            this->context->RSSetState(this->solid);
+        }
+
+        void destroyMesh(mesh* m)
+        {
+            m->indexBuffer->Release();
+            m->indexBuffer = nullptr;
+            m->vertexBuffer->Release();
+            m->vertexBuffer = nullptr;
+        }
+    };
 }
 
 namespace vi::input
