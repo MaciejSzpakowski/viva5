@@ -17,7 +17,7 @@ namespace examples
 
     void performance()
     {
-        const uint count = 2000;
+        const uint count = 10000;
         vi::vivaInfo info;
         vi::viva v;
         info.width = 960;
@@ -1034,14 +1034,14 @@ namespace examples
 
     int main()
     {
-        //basicSpriteNoViva();
-        //basicSprite();
-        //moreSprites();
-        //timerMotionAnimation();
-        //performance();
-        //keyboardMultipleAnimationsMath();
-        //multipleTextures();
-        //camera();
+        basicSpriteNoViva();
+        basicSprite();
+        moreSprites();
+        timerMotionAnimation();
+        performance();
+        keyboardMultipleAnimationsMath();
+        multipleTextures();
+        camera();
         text();
         inputState();
         typing();
