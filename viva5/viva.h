@@ -801,33 +801,32 @@ struct VertexInputType
 struct world
 {
     float x,y,z;
-    float q1,q2,q3,q4;
+    float q1,q2,q3;
     float sx,sy,sz;
+    float pad[7];
 };
 
 struct view
 {
     float aspectRatio,fovy,near,far;
+    float eyex,eyey,eyez;
+    float atx,aty,atz;
+    float upx,upy,upz;
 };
 
-struct proj
+cbuffer jedziemy: register(b0)
 {
-    float a;
+    world w;
 };
 
-cbuffer jedziemy
-{
-	world w;
-};
-
-cbuffer po
+cbuffer poziolo : register(b1)
 {
 	view v;
 };
 
-cbuffer ziolo
+cbuffer testb : register(b2)
 {
-	proj p;
+    float4x4 transform;
 };
 
 struct VS_OUTPUT
@@ -844,7 +843,7 @@ VS_OUTPUT main(VertexInputType data)
     float cp = cos(w.q2 * 0.5);
     float sp = sin(w.q2 * 0.5);
     float cy = cos(w.q3 * 0.5);
-    float sy = sin(w.q4 * 0.5);
+    float sy = sin(w.q3 * 0.5);
     float qw = cr * cp * cy + sr * sp * sy;
     float qx = sr * cp * cy - cr * sp * sy;
     float qy = cr * sp * cy + sr * cp * sy;
@@ -856,7 +855,7 @@ VS_OUTPUT main(VertexInputType data)
         2*(qx*qz-qw*qy),2*(qw*qx+qy*qz),qw*qw-qx*qx-qy*qy+qz*qz,0,
         0,0,0,1
     };
-
+    
     float4x4 locMat = {
             1,0,0, w.x,
             0,1,0, w.y,
@@ -864,6 +863,27 @@ VS_OUTPUT main(VertexInputType data)
             0,0,0, 1,
         };
     float4x4 worldMat = mul(locMat, rotMat);
+    
+    float3 eye = float3(v.eyex,v.eyey,v.eyez);
+    float3 zaxis = normalize(eye - float3(v.atx,v.aty,v.atz));
+    float3 xaxis = normalize(cross(float3(v.upx,v.upy,v.upz), zaxis));
+    float3 yaxis = cross(zaxis, xaxis);
+
+    float4x4 viewMat1 = {
+        xaxis.x, xaxis.y, xaxis.z, 0,
+        yaxis.x, yaxis.y, yaxis.z, 0,
+        zaxis.x, zaxis.y, zaxis.z, 0,
+        0,0,0,1
+    };
+
+    float4x4 viewMat2 = {
+            1,0,0,-v.eyex,
+            0,1,0,-v.eyey,
+            0,0,1,-v.eyez,
+            0,0,0,1
+        };
+
+    float4x4 viewMat = mul(viewMat1, viewMat2);
 
     // left handed
     float h = 1/tan(v.fovy*0.5);
@@ -877,14 +897,23 @@ VS_OUTPUT main(VertexInputType data)
 	float4 pos = float4(data.pos.x,data.pos.y,data.pos.z,1.0f);
 
 	VS_OUTPUT output;
-	output.Pos = mul(mul(projMat, worldMat),pos);
+	//output.Pos = mul(mul(projMat, mul(worldMat, viewMat)),pos);
+    float4x4 worldProj = mul(projMat, worldMat);
+	output.Pos = mul(worldProj,pos);
 	//output.Pos = mul(worldMat,pos);
 	output.Col = float4(1,1,1,1);
 	output.TexCoord = float2(data.TexCoord[0],data.TexCoord[1]);
 
+    //output.Pos = mul((transform),pos);
+
 	return output;
 }
 )";
+
+    struct vector3
+    {
+        float x, y, z;
+    };
 
     struct camera
     {
@@ -903,13 +932,20 @@ VS_OUTPUT main(VertexInputType data)
         float fovy;
         float znear;
         float zfar;
+        /// <summary>
+        /// where camera is
+        /// </summary>
+        vector3 eye;
+        /// <summary>
+        /// where camera looks at
+        /// </summary>
+        vector3 at;
+        /// <summary>
+        /// up vector, usually (0,1,0)
+        /// </summary>
+        vector3 up;
         // padding because this struct must be multiple of 16bytes
-        //byte padding[12];
-    };
-
-    struct vector3
-    {
-        float x, y, z;
+        float padding[3];
     };
 
     struct vector2
@@ -1291,11 +1327,11 @@ VS_OUTPUT main(VertexInputType data)
         /// vertex order for index buffer
         /// </summary>
         uint* index;
-        uint vertexCount;
-        uint indexCount;
         texture* t;
         ID3D11Buffer* vertexBuffer;
         ID3D11Buffer* indexBuffer;
+        uint vertexCount;
+        uint indexCount;
 
         float x, y, z;
         float r1, r2, r3;
@@ -1346,6 +1382,7 @@ VS_OUTPUT main(VertexInputType data)
         ID3D11Buffer* world;
         ID3D11Buffer* view;
         ID3D11Buffer* proj;
+        ID3D11Buffer* testb;
         camera camera;
         camera3D* camera3Dptr;
         float backBufferColor[4];
@@ -1583,7 +1620,7 @@ VS_OUTPUT main(VertexInputType data)
             // vs cbuffer for world view proj
             ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
-            cbbd.ByteWidth = 48;
+            cbbd.ByteWidth = 64;
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->world);
 
@@ -1592,6 +1629,12 @@ VS_OUTPUT main(VertexInputType data)
             cbbd.ByteWidth = sizeof(camera3D);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->view);
+
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = 64;
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            this->device->CreateBuffer(&cbbd, NULL, &this->testb);
 
             /*ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
@@ -1800,6 +1843,7 @@ VS_OUTPUT main(VertexInputType data)
                 this->context->VSSetShader(this->defaultMeshVS, 0, 0);
                 this->context->VSSetConstantBuffers(0, 1, &this->world);
                 this->context->VSSetConstantBuffers(1, 1, &this->view);
+                this->context->VSSetConstantBuffers(2, 1, &this->testb);
             }
 
             if (m->t != nullptr) this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);

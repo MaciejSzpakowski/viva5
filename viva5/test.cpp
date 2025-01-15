@@ -1,6 +1,7 @@
 #define VIVA_IMPL
 #define VI_VALIDATE
 #include "viva.h"
+#include <DirectXMath.h>
 
 namespace examples
 {
@@ -994,26 +995,19 @@ namespace examples
         vi::system::initWindow(&winfo, &wnd);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
-        ginfo.clearColor[0] = 0;
-        ginfo.clearColor[1] = 0;
-        ginfo.clearColor[2] = 1;
-        ginfo.clearColor[3] = 1;
+        float clearColor[] = { 0,0,1,1 };
+        memcpy(ginfo.clearColor, clearColor, sizeof(float) * 4);
         vi::gl::renderer g;
         g.init(&ginfo);
         vi::time::timer timer;
         timer.init();
 
         vi::gl::camera3D cam3d =
-        { 1,1,0.001f,1000.0f };
+        { 1,1,0.001f,1000.0f,{0,0,0},{0,0,0},{0,1,0} };
         g.camera3Dptr = &cam3d;
 
         vi::gl::texture t = {};
-        g.createTextureFromFile(&t, "textures/b.png");
-        vi::gl::mesh m = {};
-        m.t = &t;
-        m.z = 5;
-        m.vertexCount = 24;
-        m.indexCount = 36;
+        g.createTextureFromFile(&t, "textures/b.png");        
         vi::gl::vertex v[] = {
            {-1.0f, -1.0f, -1.0f, 0.0f, 1.0f},
            {-1.0f,  1.0f, -1.0f, 0.0f, 0.0f},
@@ -1040,7 +1034,7 @@ namespace examples
            {1.0f,  1.0f,  1.0f, 1.0f, 0.0f},
            {1.0f, -1.0f,  1.0f, 1.0f, 1.0f},
         };
-        uint index[] = { // Front Face
+        uint index[] = {
             2,1,0,
             3,2,0,
             6,5,4,
@@ -1054,24 +1048,92 @@ namespace examples
             22,21,20,
             23,22,20
         };
-        m.v = v;
-        m.index = index;
-        g.initMesh(&m);
+
+        vi::gl::mesh m[6];
+
+        for (uint i = 0; i < 6; i++)
+        {
+            vi::util::zero(m + i);
+            m[i].t = &t;
+            m[i].vertexCount = 24;
+            m[i].indexCount = 36;
+            m[i].v = v;
+            m[i].index = index;
+            g.initMesh(m + i);
+        }
+
+        m[0].z = 5;
+        m[1].z = -5;
+        m[2].x = 5;
+        m[3].x = -5;
+        m[4].y = 5;
+        m[5].y = -5;
+        float eyex = 0, eyey = 2, eyez = -4;
+
+        vi::input::keyboard k;
+        k.init();        
 
         while (vi::system::updateWindow(&wnd))
         {
             timer.update();
+            k.update();
+            float f1 = 4;
+
+            if (k.isKeyDown(vi::input::LCONTROL))
+            {
+                if (k.isKeyDown('R'))
+                    cam3d.eye.z += timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('F'))
+                    cam3d.eye.z -= timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('A'))
+                    cam3d.eye.y += timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('D'))
+                    cam3d.eye.y -= timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('W'))
+                    cam3d.eye.x += timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('S'))
+                    cam3d.eye.x -= timer.getTickTimeSec() * f1;
+            }
+            else
+            {
+                if (k.isKeyDown('R'))
+                    eyex += timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('F'))
+                    eyex -= timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('A'))
+                    eyey += timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('D'))
+                    eyey -= timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('W'))
+                    eyez += timer.getTickTimeSec() * f1;
+                if (k.isKeyDown('S'))
+                    eyez -= timer.getTickTimeSec() * f1;
+            }
+
+            DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH({ eyex,eyey,eyez,0 }, { 0,0,0,0 }, { 0,1,0,0 });
+            DirectX::XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(1, 1, 0.1f, 1000.0f);
+            DirectX::XMMATRIX pos = DirectX::XMMatrixTranslation(0, 0, 0);
+            DirectX::XMMATRIX rot = DirectX::XMMatrixRotationRollPitchYaw(0, 0,0);
+            DirectX::XMMATRIX id = DirectX::XMMatrixIdentity();
+            auto transform = rot * pos * view * proj;
+            g.context->UpdateSubresource(g.testb, 0, NULL, &transform, 0, 0);
 
             g.beginScene();
-            m.r1 = timer.getGameTimeSec();
-            m.r2 = timer.getGameTimeSec();
-            //m.r3 = timer.getGameTimeSec();
-            g.drawMesh(&m);
+            m[0].r1 = timer.getGameTimeSec();
+            m[0].r2 = timer.getGameTimeSec();
+            m[0].r3 = timer.getGameTimeSec();
+            for (uint i = 0; i < 6; i++)
+            {
+                g.drawMesh(m + i);
+            }
             g.endScene();
         }
 
         //g.destroyTexture(&t);
-        g.destroyMesh(&m);
+        for (uint i = 0; i < 6; i++)
+        {
+            g.destroyMesh(m + i);
+        }
         g.destroy();
         vi::system::destroyWindow(&wnd);
     }
