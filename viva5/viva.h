@@ -848,7 +848,6 @@ VS_OUTPUT main(VertexInputType data)
     float qx = sr * cp * cy - cr * sp * sy;
     float qy = cr * sp * cy + sr * cp * sy;
     float qz = cr * cp * sy - sr * sp * cy;
-
     float4x4 rotMat = {
         qw*qw+qx*qx-qy*qy-qz*qz, 2*(qx*qy-qw*qz), 2*(qw*qy+qx*qz),0,
         2*(qx*qy+qw*qz),qw*qw-qx*qx+qy*qy-qz*qz,2*(qy*qz-qw*qx),0,
@@ -862,28 +861,21 @@ VS_OUTPUT main(VertexInputType data)
             0,0,1, w.z,
             0,0,0, 1,
         };
+
     float4x4 worldMat = mul(locMat, rotMat);
     
-    float3 eye = float3(v.eyex,v.eyey,v.eyez);
-    float3 zaxis = normalize(eye - float3(v.atx,v.aty,v.atz));
-    float3 xaxis = normalize(cross(float3(v.upx,v.upy,v.upz), zaxis));
+    float3 eye = {v.eyex, v.eyey, v.eyez};
+    float3 at = {v.atx,v.aty,v.atz};
+    float3 up = {v.upx,v.upy,v.upz};
+    float3 zaxis = normalize(at - eye);
+    float3 xaxis = normalize(cross(up, zaxis));
     float3 yaxis = cross(zaxis, xaxis);
-
-    float4x4 viewMat1 = {
-        xaxis.x, xaxis.y, xaxis.z, 0,
-        yaxis.x, yaxis.y, yaxis.z, 0,
-        zaxis.x, zaxis.y, zaxis.z, 0,
+    float4x4 viewMat = {
+        xaxis.x, xaxis.y, xaxis.z, -dot( xaxis, eye ),
+        yaxis.x, yaxis.y, yaxis.z, -dot( yaxis, eye ),
+        zaxis.x, zaxis.y, zaxis.z, -dot( zaxis, eye ),
         0,0,0,1
     };
-
-    float4x4 viewMat2 = {
-            1,0,0,-v.eyex,
-            0,1,0,-v.eyey,
-            0,0,1,-v.eyez,
-            0,0,0,1
-        };
-
-    float4x4 viewMat = mul(viewMat1, viewMat2);
 
     // left handed
     float h = 1/tan(v.fovy*0.5);
@@ -897,14 +889,9 @@ VS_OUTPUT main(VertexInputType data)
 	float4 pos = float4(data.pos.x,data.pos.y,data.pos.z,1.0f);
 
 	VS_OUTPUT output;
-	//output.Pos = mul(mul(projMat, mul(worldMat, viewMat)),pos);
-    float4x4 worldProj = mul(projMat, worldMat);
-	output.Pos = mul(worldProj,pos);
-	//output.Pos = mul(worldMat,pos);
+	output.Pos = mul(mul(projMat, mul(viewMat, worldMat)),pos);
 	output.Col = float4(1,1,1,1);
 	output.TexCoord = float2(data.TexCoord[0],data.TexCoord[1]);
-
-    //output.Pos = mul((transform),pos);
 
 	return output;
 }
@@ -1324,12 +1311,16 @@ VS_OUTPUT main(VertexInputType data)
     {
         vertex* v;
         /// <summary>
-        /// vertex order for index buffer
+        /// vertex order for index buffer, this can be null
+        /// if it's null then vertices are rendered in order, topology is always 'triangle list'
         /// </summary>
         uint* index;
         texture* t;
         ID3D11Buffer* vertexBuffer;
         ID3D11Buffer* indexBuffer;
+        /// <summary>
+        /// this should be multiple of 3 since topology is triangle list
+        /// </summary>
         uint vertexCount;
         uint indexCount;
 
@@ -1381,8 +1372,6 @@ VS_OUTPUT main(VertexInputType data)
         ID3D11Buffer* cbufferVScamera;
         ID3D11Buffer* world;
         ID3D11Buffer* view;
-        ID3D11Buffer* proj;
-        ID3D11Buffer* testb;
         camera camera;
         camera3D* camera3Dptr;
         float backBufferColor[4];
@@ -1393,7 +1382,8 @@ VS_OUTPUT main(VertexInputType data)
         double frameTime;
         bool fullscreen;
         /// <summary>
-        /// 
+        /// if you render meshes and sprites then batch them together
+        /// different constant buffers have to be set when mesh or sprite is rendered
         /// </summary>
         bool drawingSprites;
 
@@ -1630,12 +1620,6 @@ VS_OUTPUT main(VertexInputType data)
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->view);
 
-            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
-            cbbd.Usage = D3D11_USAGE_DEFAULT;
-            cbbd.ByteWidth = 64;
-            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-            this->device->CreateBuffer(&cbbd, NULL, &this->testb);
-
             /*ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
             cbbd.ByteWidth = sizeof(camera);
@@ -1803,6 +1787,15 @@ VS_OUTPUT main(VertexInputType data)
             t->shaderResource = nullptr;
         }
 
+        /// <summary>
+        /// this can be used to start a new layer
+        /// </summary>
+        void clearDepth()
+        {
+            this->context->ClearDepthStencilView(this->depthStencilView,
+                D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+        }
+
         void beginScene()
         {
             this->context->ClearRenderTargetView(this->backBuffer, this->backBufferColor);
@@ -1843,7 +1836,6 @@ VS_OUTPUT main(VertexInputType data)
                 this->context->VSSetShader(this->defaultMeshVS, 0, 0);
                 this->context->VSSetConstantBuffers(0, 1, &this->world);
                 this->context->VSSetConstantBuffers(1, 1, &this->view);
-                this->context->VSSetConstantBuffers(2, 1, &this->testb);
             }
 
             if (m->t != nullptr) this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);

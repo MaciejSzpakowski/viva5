@@ -1,7 +1,6 @@
 #define VIVA_IMPL
 #define VI_VALIDATE
 #include "viva.h"
-#include <DirectXMath.h>
 
 namespace examples
 {
@@ -1003,7 +1002,7 @@ namespace examples
         timer.init();
 
         vi::gl::camera3D cam3d =
-        { 1,1,0.001f,1000.0f,{0,0,0},{0,0,0},{0,1,0} };
+        { 1,1,0.001f,1000.0f,{0,2,-4},{0,0,0},{0,1,0} };
         g.camera3Dptr = &cam3d;
 
         vi::gl::texture t = {};
@@ -1049,9 +1048,10 @@ namespace examples
             23,22,20
         };
 
-        vi::gl::mesh m[6];
+        const uint meshCount = 7;
+        vi::gl::mesh m[meshCount];
 
-        for (uint i = 0; i < 6; i++)
+        for (uint i = 0; i < meshCount; i++)
         {
             vi::util::zero(m + i);
             m[i].t = &t;
@@ -1068,7 +1068,6 @@ namespace examples
         m[3].x = -5;
         m[4].y = 5;
         m[5].y = -5;
-        float eyex = 0, eyey = 2, eyez = -4;
 
         vi::input::keyboard k;
         k.init();        
@@ -1078,9 +1077,6 @@ namespace examples
             timer.update();
             k.update();
             float f1 = 4;
-
-            if (k.isKeyDown(vi::input::LCONTROL))
-            {
                 if (k.isKeyDown('R'))
                     cam3d.eye.z += timer.getTickTimeSec() * f1;
                 if (k.isKeyDown('F'))
@@ -1093,44 +1089,19 @@ namespace examples
                     cam3d.eye.x += timer.getTickTimeSec() * f1;
                 if (k.isKeyDown('S'))
                     cam3d.eye.x -= timer.getTickTimeSec() * f1;
-            }
-            else
-            {
-                if (k.isKeyDown('R'))
-                    eyex += timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('F'))
-                    eyex -= timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('A'))
-                    eyey += timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('D'))
-                    eyey -= timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('W'))
-                    eyez += timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('S'))
-                    eyez -= timer.getTickTimeSec() * f1;
-            }
-
-            DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH({ eyex,eyey,eyez,0 }, { 0,0,0,0 }, { 0,1,0,0 });
-            DirectX::XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(1, 1, 0.1f, 1000.0f);
-            DirectX::XMMATRIX pos = DirectX::XMMatrixTranslation(0, 0, 0);
-            DirectX::XMMATRIX rot = DirectX::XMMatrixRotationRollPitchYaw(0, 0,0);
-            DirectX::XMMATRIX id = DirectX::XMMatrixIdentity();
-            auto transform = rot * pos * view * proj;
-            g.context->UpdateSubresource(g.testb, 0, NULL, &transform, 0, 0);
 
             g.beginScene();
-            m[0].r1 = timer.getGameTimeSec();
-            m[0].r2 = timer.getGameTimeSec();
-            m[0].r3 = timer.getGameTimeSec();
-            for (uint i = 0; i < 6; i++)
-            {
+            m[6].r1 = timer.getGameTimeSec();
+            m[6].r2 = timer.getGameTimeSec();
+            m[6].r3 = timer.getGameTimeSec();
+            for (uint i = 0; i < meshCount; i++)
                 g.drawMesh(m + i);
-            }
+
             g.endScene();
         }
 
         //g.destroyTexture(&t);
-        for (uint i = 0; i < 6; i++)
+        for (uint i = 0; i < meshCount; i++)
         {
             g.destroyMesh(m + i);
         }
