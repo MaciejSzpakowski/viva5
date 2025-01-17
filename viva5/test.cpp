@@ -108,7 +108,22 @@ namespace examples
     // bottom chest will stop blinking after 5s
     /*void queue()
     {
-        gameData data;
+        vi::system::windowInfo winfo = {};
+        winfo.width = 960;
+        winfo.height = 540;
+        winfo.title = "Queue";
+        vi::system::window wnd;
+        vi::system::initWindow(&winfo, &wnd);
+        vi::gl::rendererInfo ginfo = {};
+        ginfo.wnd = &wnd;
+        float clearColor[] = { 0,0,1,1 };
+        memcpy(ginfo.clearColor, clearColor, sizeof(float) * 4);
+        vi::gl::renderer g;
+        g.init(&ginfo);
+        vi::time::timer timer;
+        timer.init();
+        vi::fn::queue queue;
+        queue.init(&timer);
 
         auto loop = [&](uint i)
         {
@@ -116,7 +131,6 @@ namespace examples
             data.v.queue.update();
             vi::graphics::drawScene(&data.v.graphics, data.sprites, 10, &data.v.camera);
         };
-
         
         vi::vivaInfo info;
         info.width = 960;
@@ -185,9 +199,48 @@ namespace examples
     /// Here, upper sprites should be all above lower sprites
     /// so they are layered independently from order.
     /// </summary>
-    /*void zindex()
+    void zindex()
     {
-        auto loop = [](gameData* _gameData)
+        vi::system::windowInfo winfo = {};
+        winfo.width = 960;
+        winfo.height = 540;
+        winfo.title = "Z Index";
+        vi::system::window wnd;
+        vi::system::initWindow(&winfo, &wnd);
+        vi::gl::rendererInfo ginfo = {};
+        ginfo.wnd = &wnd;
+        ginfo.clearColor[0] = 0;
+        ginfo.clearColor[1] = 0;
+        ginfo.clearColor[2] = 1;
+        ginfo.clearColor[3] = 1;
+        vi::gl::renderer g;
+        g.init(&ginfo);
+        vi::gl::texture t;
+        g.createTextureFromFile(&t, "textures/0x72_DungeonTilesetII_v1.png");
+        t.index = 0;
+        vi::gl::sprite s[10];
+
+        for (uint i = 0; i < 10; i++)
+        {
+            s[i].init(&t);
+            s[i].s2.pos = { -0.8f + i * 0.2f, i % 2 ? 0.2f : 0.1f, i % 2 ? 0.5f : 0.25f };
+            g.setUvFromPixels(s + i, 240, 208, 16, 16, 512, 512);
+            g.setPixelScale(s + i, 80, 80);
+        }
+
+        while (vi::system::updateWindow(&wnd))
+        {
+            g.beginScene();
+            for (uint i = 0; i < 10; i++)
+                g.drawSprite(s + i);
+            g.endScene();
+        }
+
+        g.destroyTexture(&t);
+        g.destroy();
+        vi::system::destroyWindow(&wnd);
+
+        /*auto loop = [](gameData* _gameData)
         {
             vi::graphics::drawScene(&_gameData->v.graphics, _gameData->sprites, 10, &_gameData->v.camera);
         };
@@ -215,11 +268,14 @@ namespace examples
 
 #undef MAKE_SPRITE
 
-        vi::system::loop<gameData*>(loop, &data);
+        for (uint i = 0; i < 10; i++)
+        {
+
+        }
 
         vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        data.v.destroy();
-    }*/
+        data.v.destroy();*/
+    }
 
     // get some cursor data
     // left click and mouse move to move square
@@ -1169,8 +1225,8 @@ namespace examples
         text();
         inputState();
         typing();
+        zindex();
         //mouseAndFixedSprite();
-        //zindex();
         //queue();
         //network();
 
