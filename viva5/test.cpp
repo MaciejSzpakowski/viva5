@@ -4,6 +4,184 @@
 
 namespace examples
 {
+    struct resources
+    {
+        vi::memory::alloctrack a;
+        std::vector<vi::gl::texture*> textures;
+        std::vector<vi::gl::font*> fonts;
+        std::vector<vi::gl::sprite*> sprites;
+        std::vector<vi::gl::animation*> animations;
+        std::vector<vi::gl::text*> texts;
+        std::vector<vi::gl::dynamic*> dynamics;
+        std::vector<vi::fn::routine*> routines;
+
+        vi::gl::texture* addTexture()
+        {
+            uint index = this->textures.size();
+            vi::gl::texture* t = this->a.alloc<vi::gl::texture>(1);
+            vi::util::zero(t);
+            t->index = index;
+            this->textures.push_back(t);
+            return t;
+        }
+
+        vi::gl::font* addFont()
+        {
+            vi::gl::font* f = this->a.alloc<vi::gl::font>(1);
+            vi::util::zero(f);
+            this->fonts.push_back(f);
+            return f;
+        }
+
+        vi::gl::animation* addAnimation()
+        {
+            vi::gl::animation* a = this->a.alloc<vi::gl::animation>(1);
+            vi::util::zero(a);
+            this->animations.push_back(a);
+            return a;
+        }
+
+        vi::gl::text* addText()
+        {
+            vi::gl::text* t = this->a.alloc<vi::gl::text>(1);
+            vi::util::zero(t);
+            this->texts.push_back(t);
+            return t;
+        }
+
+        vi::gl::dynamic* addDynamic()
+        {
+            vi::gl::dynamic* d = this->a.alloc<vi::gl::dynamic>(1);
+            vi::util::zero(d);
+            this->dynamics.push_back(d);
+            return d;
+        }
+
+        vi::gl::sprite* addSprite()
+        {
+            return this->addSprite(1);
+        }
+
+        vi::gl::sprite* addSprite(uint len)
+        {
+            vi::gl::sprite* s = this->a.alloc<vi::gl::sprite>(len);
+            vi::util::zeron(s, len);
+            for (uint i = 0; i < len; i++) this->sprites.push_back(s + i);
+            return s;
+        }
+
+        vi::fn::routine* addRoutine()
+        {
+            vi::fn::routine* r = this->a.alloc<vi::fn::routine>(1);
+            vi::util::zero(r);
+            this->routines.push_back(r);
+            return r;
+        }
+
+        void free()
+        {
+            this->textures.clear();
+            this->fonts.clear();
+            this->animations.clear();
+            this->dynamics.clear();
+            this->routines.clear();
+            this->sprites.clear();
+            this->texts.clear();
+            for (uint i = 0; i < this->a.allocations.size(); i++)
+                this->a.free(this->a.allocations[i]);
+            this->a.allocations.clear();
+        }
+    };
+
+    struct vivaInfo
+    {
+        uint width;
+        uint height;
+        const char* title;
+        uint queueCapacity;
+    };
+
+    struct viva
+    {
+        vi::input::keyboard keyboard;
+        vi::input::mouse mouse;
+        vi::system::window window;
+        vi::gl::renderer graphics;
+        vi::memory::alloctrack alloctrack;
+        vi::time::timer timer;
+        vi::fn::queue queue;
+        resources resources;
+
+        void init(vivaInfo* info)
+        {
+            vi::system::windowInfo wInfo;
+            wInfo.width = info->width;
+            wInfo.height = info->height;
+            wInfo.title = info->title;
+
+            vi::gl::rendererInfo rInfo;
+            rInfo.clearColor[0] = 47 / 255.0f;
+            rInfo.clearColor[1] = 79 / 255.0f;
+            rInfo.clearColor[2] = 79 / 255.0f;
+            rInfo.clearColor[3] = 1;
+            rInfo.wnd = &this->window;
+
+            vi::system::initWindow(&wInfo, &this->window);
+            this->keyboard.init();
+            this->mouse.init();
+            this->graphics.init(&rInfo);
+            this->timer.init();
+
+            // if queue capacity is not set then set it to 1
+            if (info->queueCapacity == 0) info->queueCapacity = 1;
+
+            this->queue.init(&this->timer);
+
+#ifdef VI_VALIDATE
+            this->alloctrack.track = true;
+#endif
+        }
+
+        void destroy()
+        {
+            for (uint i = 0; i < this->resources.textures.size(); i++)
+                this->graphics.destroyTexture(this->resources.textures[i]);
+
+            this->resources.free();
+#ifdef VI_VALIDATE
+            this->alloctrack.report();
+#endif // VI_VALIDATE
+
+            this->graphics.destroy();
+            vi::system::destroyWindow(&this->window);
+        }
+
+        void loop(std::function<void()> userLoop)
+        {
+            while (vi::system::updateWindow(&this->window))
+            {
+                this->keyboard.update();
+                this->mouse.update(&this->window, &this->graphics.camera);
+                this->timer.update();
+
+                userLoop();
+
+                for (uint i = 0; i < this->resources.animations.size(); i++)
+                    this->resources.animations[i]->update();
+                for (uint i = 0; i < this->resources.dynamics.size(); i++)
+                    this->resources.dynamics[i]->update();
+
+                this->graphics.beginScene();
+                for (uint i = 0; i < this->resources.sprites.size(); i++)
+                {
+                    vi::gl::sprite* s = this->resources.sprites[i];
+                    this->graphics.drawSprite(s);
+                }
+                this->graphics.endScene();
+            }
+        }
+    };
+
     void empty() {}
     
     struct user
@@ -16,8 +194,8 @@ namespace examples
     void performance()
     {
         const uint count = 10000;
-        vi::vivaInfo info;
-        vi::viva v;
+        vivaInfo info;
+        viva v;
         info.width = 960;
         info.height = 540;
         info.queueCapacity = 1;
@@ -209,9 +387,9 @@ namespace examples
         vi::system::initWindow(&winfo, &wnd);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
-        ginfo.clearColor[0] = 0;
-        ginfo.clearColor[1] = 0;
-        ginfo.clearColor[2] = 1;
+        ginfo.clearColor[0] = 47 / 255.0f;
+        ginfo.clearColor[1] = 79 / 255.0f;
+        ginfo.clearColor[2] = 79 / 255.0f;
         ginfo.clearColor[3] = 1;
         vi::gl::renderer g;
         g.init(&ginfo);
@@ -239,42 +417,6 @@ namespace examples
         g.destroyTexture(&t);
         g.destroy();
         vi::system::destroyWindow(&wnd);
-
-        /*auto loop = [](gameData* _gameData)
-        {
-            vi::graphics::drawScene(&_gameData->v.graphics, _gameData->sprites, 10, &_gameData->v.camera);
-        };
-
-        gameData data;
-        vi::vivaInfo info;
-        info.width = 960;
-        info.height = 540;
-        info.title = "Z Index";
-        data.v.init(&info);
-
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/0x72_DungeonTilesetII_v1.png", data.tex);
-        vi::graphics::pushTextures(&data.v.graphics, data.tex, 1);
-
-#define MAKE_SPRITE(n,x,y,z)  vi::graphics::initSprite(data.sprites + n, data.tex[0].index); \
-        vi::graphics::setUvFromPixels(240, 208, 16, 16, 512, 512, &data.sprites[n].s2.uv1); \
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 16 * 5, 16 * 5, \
-            &data.sprites[n].s1.sx, &data.sprites[n].s1.sy); \
-        data.sprites[n].s2.pos = {x,y,z};
-
-        for (int i = 0; i < 10; i++)
-        {
-            MAKE_SPRITE(i, -0.8f + i * 0.2f, i % 2 ? 0.2f : 0.1f, i % 2 ? 0.5f : 0.25f)
-        }
-
-#undef MAKE_SPRITE
-
-        for (uint i = 0; i < 10; i++)
-        {
-
-        }
-
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        data.v.destroy();*/
     }
 
     // get some cursor data
@@ -418,8 +560,8 @@ namespace examples
         sprintf(str, "Type something_");
         uint len = strlen(str) - 1;
 
-        vi::viva v;
-        vi::vivaInfo info;
+        viva v;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Typing";
@@ -476,11 +618,11 @@ namespace examples
     {
         char str[1000];        
 
-        vi::vivaInfo info;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Input state";
-        vi::viva v;
+        viva v;
         v.init(&info);
 
         vi::gl::texture* t = v.resources.addTexture();
@@ -518,7 +660,7 @@ namespace examples
 
     void text()
     {
-        vi::viva v;
+        viva v;
         bool flag = false;
         const uint capacity = 300;
         char str[capacity];
@@ -526,7 +668,7 @@ namespace examples
             "can be manipulated individually.\nPress space to toggle";
         const char* extra = "\n more stuff";        
 
-        vi::vivaInfo info;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Text";
@@ -590,9 +732,9 @@ namespace examples
     // zooming should be towards the center of the screen
     void camera()
     {
-        vi::viva v;        
+        viva v;        
 
-        vi::vivaInfo info;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Camera";
@@ -650,10 +792,11 @@ namespace examples
     }
     
     // just to make sure they still work
+    // with vulkan it was much harder
     void multipleTextures()
     {
-        vi::viva v;
-        vi::vivaInfo info;
+        viva v;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Multiple textures";
@@ -693,8 +836,8 @@ namespace examples
         // so when it changes, animation is flipped
         float elfDirection = 1;
         float monsterDirection = 1;
-        vi::viva v;
-        vi::vivaInfo info;
+        viva v;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Keyboard";
@@ -866,11 +1009,11 @@ namespace examples
 
     void timerMotionAnimation()
     {
-        vi::vivaInfo info;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "Timer, motion and animation";
-        vi::viva v;
+        viva v;
         v.init(&info);
         v.graphics.camera.scale = 0.1f;
 
@@ -936,11 +1079,11 @@ namespace examples
     // more drawing options
     void moreSprites()
     {
-        vi::vivaInfo info;
+        vivaInfo info;
         info.width = 960;
         info.height = 540;
         info.title = "More sprites";
-        vi::viva v;
+        viva v;
         v.init(&info);
         v.graphics.camera.scale = 0.1f;
 
@@ -998,8 +1141,7 @@ namespace examples
         v.destroy();
     }
 
-    // no wrappers (no viva object)
-    void basicSpriteNoViva()
+    void basicSprite()
     {
         vi::system::windowInfo winfo = {};
         winfo.width = 500;
@@ -1009,9 +1151,9 @@ namespace examples
         vi::system::initWindow(&winfo, &wnd);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
-        ginfo.clearColor[0] = 0;
-        ginfo.clearColor[1] = 0;
-        ginfo.clearColor[2] = 1;
+        ginfo.clearColor[0] = 47 / 255.0f;
+        ginfo.clearColor[1] = 79 / 255.0f;
+        ginfo.clearColor[2] = 79 / 255.0f;
         ginfo.clearColor[3] = 1;
         vi::gl::renderer g;
         g.init(&ginfo);
@@ -1050,8 +1192,10 @@ namespace examples
         vi::system::initWindow(&winfo, &wnd);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
-        float clearColor[] = { 0,0,1,1 };
-        memcpy(ginfo.clearColor, clearColor, sizeof(float) * 4);
+        ginfo.clearColor[0] = 47 / 255.0f;
+        ginfo.clearColor[1] = 79 / 255.0f;
+        ginfo.clearColor[2] = 79 / 255.0f;
+        ginfo.clearColor[3] = 1;
         vi::gl::renderer g;
         g.init(&ginfo);
         vi::time::timer timer;
@@ -1165,56 +1309,9 @@ namespace examples
         vi::system::destroyWindow(&wnd);
     }
 
-    // most basic example if you want to see something on the screen
-    void basicSprite()
-    {
-        // init viva
-        // it's a wrapper function that initializes some viva objects
-        vi::vivaInfo info;
-        // viewport size
-        info.width = 960;
-        info.height = 540;
-        // window title
-        info.title = "Basic sprites";
-        vi::viva v;
-        v.init(&info);
-
-        // create some texture
-        // this should be done once per level/game because resource creation is expensive
-        vi::gl::texture* t = v.resources.addTexture();
-        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
-
-        // initialize one sprite for drawing
-        // CRUCIAL FIELDS
-        // "left,right,top,bottom" is for UV
-        //         if uninitialized then they gonna be 0,0,0,0 so segment of nothing will be used
-        //         init function will initialize to 0,0,1,1 which means use the whole texture
-        // "textureIndex"
-        // "sx,sy" is scale, use something other than 0,0 because it means that sprite is infinitely small
-        // "r,g,b" are color coefficients, texel is multiplied by them so use 1,1,1 if you want to use texel as it is
-        vi::gl::sprite* s = v.resources.addSprite();
-        s->init(t);
-        v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
-
-        // in this case, object on the texture is 6x13 pixels
-        // i want to set it to 60x130 to make it biger but still proportional
-        v.graphics.setPixelScale(s, 6 * 10, 13 * 10);
-
-        // add blank sprite (no texture required, just set index to vi::gl::TEXTURE_BLANK)
-        vi::gl::sprite* blank = v.resources.addSprite();
-        blank->init(nullptr);
-        blank->s1.flags = vi::gl::SPR_TEXTURE_BLANK;
-        blank->s2.col = { 0.5f,1.0f,0 };
-
-        v.loop(empty);
-
-        v.destroy();
-    }
-
     int main()
     {
         mesh();
-        basicSpriteNoViva();
         basicSprite();
         moreSprites();
         timerMotionAnimation();
