@@ -903,6 +903,11 @@ VS_OUTPUT main(VertexInputType data)
 }
 )";
 
+    struct vector4
+    {
+        float x, y, z, w;
+    };
+
     struct vector3
     {
         float x, y, z;
