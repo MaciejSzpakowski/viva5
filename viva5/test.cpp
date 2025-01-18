@@ -1252,28 +1252,17 @@ namespace examples
         vi::gl::mesh m[meshCount];
 
         for (uint i = 0; i < meshCount; i++)
-        {
-            vi::util::zero(m + i);
-            m[i].t = &t;
-            m[i].vertexCount = 24;
-            m[i].indexCount = 36;
-            m[i].v = v;
-            m[i].sx = 1;
-            m[i].sy = 1;
-            m[i].sz = 1;
-            m[i].index = index;
-            g.initMesh(m + i);
-        }
+            g.initMesh(m + i, v, 24, index, 36, &t);
 
-        m[0].z = 5;
-        m[1].z = -5;
-        m[2].x = 5;
-        m[3].x = -5;
-        m[4].y = 5;
-        m[5].y = -5;
-        m[6].sx = 2;
-        m[6].sy = 2;
-        m[6].sz = 2;
+        m[0].pos.z = 5;
+        m[1].pos.z = -5;
+        m[2].pos.x = 5;
+        m[3].pos.x = -5;
+        m[4].pos.y = 5;
+        m[5].pos.y = -5;
+        m[6].sca.x = 2;
+        m[6].sca.y = 2;
+        m[6].sca.z = 2;
 
         vi::input::keyboard k;
         k.init();        
@@ -1297,9 +1286,9 @@ namespace examples
                     cam3d.eye.x -= timer.getTickTimeSec() * f1;
 
             g.beginScene();
-            m[6].r1 = timer.getGameTimeSec();
-            m[6].r2 = timer.getGameTimeSec();
-            m[6].r3 = timer.getGameTimeSec();
+            m[6].rot.x = timer.getGameTimeSec();
+            m[6].rot.y = timer.getGameTimeSec();
+            m[6].rot.z = timer.getGameTimeSec();
             for (uint i = 0; i < meshCount; i++)
                 g.drawMesh(m + i);
 

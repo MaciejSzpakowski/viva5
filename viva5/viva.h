@@ -800,10 +800,9 @@ struct VertexInputType
 
 struct world
 {
-    float x,y,z;
-    float q1,q2,q3;
+    float x,y,z, pad1;
+    float q1,q2,q3, pad2;
     float sx,sy,sz;
-    float pad[7];
 };
 
 struct view
@@ -1306,12 +1305,12 @@ VS_OUTPUT main(VertexInputType data)
 
     struct vertex
     {
-        float x, y, z;
-        float u, v;
+        vector3 pos;
+        vector2 uv;
         /// <summary>
         /// light information
         /// </summary>
-        float r, g, b;
+        color color;
     };
 
     struct mesh
@@ -1331,10 +1330,12 @@ VS_OUTPUT main(VertexInputType data)
         uint vertexCount;
         uint indexCount;
 
-        float x, y, z;
-        float r1, r2, r3;
-        float sx, sy, sz;
-        float padding[3];
+        vector3 pos;
+        float pad1;
+        vector3 rot;
+        float pad2;
+        vector3 sca;
+        float pad3;
     };
 
     struct rendererInfo
@@ -1846,7 +1847,7 @@ VS_OUTPUT main(VertexInputType data)
             }
 
             if (m->t != nullptr) this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
-            this->context->UpdateSubresource(this->world, 0, NULL, &m->x, 0, 0);
+            this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
 
             if (m->indexBuffer)
             {
@@ -1927,10 +1928,19 @@ VS_OUTPUT main(VertexInputType data)
         }
 
         /// <summary>
+        /// index is not required;
         /// mesh will be drawn as triangle list so index count should be multiple of 3
         /// </summary>
-        void initMesh(mesh* m)
+        void initMesh(mesh* m, vertex* v, uint vertexCount, uint* index, uint indexCount, texture* t)
         {
+            util::zero(m);
+            m->index = index;
+            m->indexCount = indexCount;
+            m->vertexCount = vertexCount;
+            m->v = v;
+            m->sca = { 1,1,1 };
+            m->t = t;
+
             D3D11_BUFFER_DESC vertexBufferDesc = {};
 
             vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -1949,11 +1959,14 @@ VS_OUTPUT main(VertexInputType data)
             indexBufferDesc.ByteWidth = sizeof(uint) * m->indexCount;
             indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 
-            D3D11_SUBRESOURCE_DATA iinitData = {};
-            iinitData.pSysMem = m->index;
+            if (m->index)
+            {
+                D3D11_SUBRESOURCE_DATA iinitData = {};
+                iinitData.pSysMem = m->index;
 
-            hr = this->device->CreateBuffer(&indexBufferDesc, &iinitData, &m->indexBuffer);
-            checkhr(hr, __LINE__);
+                hr = this->device->CreateBuffer(&indexBufferDesc, &iinitData, &m->indexBuffer);
+                checkhr(hr, __LINE__);
+            }
         }
 
         void setWireframe()
