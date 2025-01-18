@@ -862,7 +862,14 @@ VS_OUTPUT main(VertexInputType data)
             0,0,0, 1,
         };
 
-    float4x4 worldMat = mul(locMat, rotMat);
+    float4x4 scaleMat = {
+        w.sx,0,0,0,
+        0,w.sy,0,0,
+        0,0,w.sz,0,
+        0,0,0,1
+    };
+
+    float4x4 worldMat = mul(locMat, mul(rotMat, scaleMat));
     
     float3 eye = {v.eyex, v.eyey, v.eyez};
     float3 at = {v.atx,v.aty,v.atz};

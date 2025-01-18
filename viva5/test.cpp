@@ -1258,6 +1258,9 @@ namespace examples
             m[i].vertexCount = 24;
             m[i].indexCount = 36;
             m[i].v = v;
+            m[i].sx = 1;
+            m[i].sy = 1;
+            m[i].sz = 1;
             m[i].index = index;
             g.initMesh(m + i);
         }
@@ -1268,6 +1271,9 @@ namespace examples
         m[3].x = -5;
         m[4].y = 5;
         m[5].y = -5;
+        m[6].sx = 2;
+        m[6].sy = 2;
+        m[6].sz = 2;
 
         vi::input::keyboard k;
         k.init();        
