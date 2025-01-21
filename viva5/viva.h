@@ -618,6 +618,7 @@ struct VS_OUTPUT
 	float4 Pos : SV_POSITION;
 	float4 Col : COLOR;
 	float2 TexCoord : TEXCOORD;
+    uint4 data: COLOR2;
 };
 
 float4 main(VS_OUTPUT input) : SV_TARGET
@@ -627,7 +628,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         discard;
         return float4(0,0,0,0);
     }
-    else if(input.Col.a == 0.5f)
+    else if(input.data[0] & 2)
     {
         return float4(input.Col.rgb, 1);
     }
@@ -704,6 +705,7 @@ struct VS_OUTPUT
 	float4 Pos : SV_POSITION;
 	float4 Col : COLOR;
 	float2 TexCoord : TEXCOORD;
+    uint4 data: COLOR2;
 };
 
 static float4 vertices[6] = {
@@ -780,11 +782,12 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 	output.Pos = mul(mul(mul(mul(mul(cam,loc), rot), sca), ori), pos);
     output.Pos.z = spr.z;
 	output.Col = float4(spr.r, spr.g, spr.b, 1);
-    if(spr.flags & 1) output.Col.a = 0.0f;
-    else if(spr.flags & 2) output.Col.a = 0.5f;
     int u = uv[vid].x;
     int v = uv[vid].y;
     output.TexCoord = float2(spr.uv[u],spr.uv[v]);
+    output.data = float4(0,0,0,0);
+    if(spr.flags & 1) output.Col.a = 0.0f;
+    output.data[0] = spr.flags;
 
 	return output;
 }
@@ -803,6 +806,8 @@ struct world
     float x,y,z, pad1;
     float q1,q2,q3, pad2;
     float sx,sy,sz;
+    uint data;
+    float4 color;
 };
 
 struct view
@@ -833,6 +838,7 @@ struct VS_OUTPUT
 	float4 Pos : SV_POSITION;
 	float4 Col : COLOR;
 	float2 TexCoord : TEXCOORD;
+    uint4 data: COLOR2;
 };
 
 VS_OUTPUT main(VertexInputType data)
@@ -896,8 +902,10 @@ VS_OUTPUT main(VertexInputType data)
 
 	VS_OUTPUT output;
 	output.Pos = mul(mul(projMat, mul(viewMat, worldMat)),pos);
-	output.Col = float4(1,1,1,1);
+	output.Col = w.color;
+    output.Col.a = 1;
 	output.TexCoord = float2(data.TexCoord[0],data.TexCoord[1]);
+    output.data = uint4(w.data,0,0,0);
 
 	return output;
 }
@@ -1340,7 +1348,9 @@ VS_OUTPUT main(VertexInputType data)
         vector3 rot;
         float pad2;
         vector3 sca;
-        float pad3;
+        uint data;
+        color color;
+        uint pad3;
     };
 
     struct rendererInfo
@@ -1944,6 +1954,7 @@ VS_OUTPUT main(VertexInputType data)
             m->vertexCount = vertexCount;
             m->v = v;
             m->sca = { 1,1,1 };
+            m->color = { 1,1,1 };
             m->t = t;
 
             D3D11_BUFFER_DESC vertexBufferDesc = {};

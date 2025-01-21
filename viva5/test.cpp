@@ -1202,7 +1202,7 @@ namespace examples
         timer.init();
 
         vi::gl::camera3D cam3d =
-        { 1,1,0.001f,1000.0f,{0,2,-4},{0,0,0},{0,1,0} };
+        { 1,1,0.001f,1000.0f,{-10,10,-10},{0,0,0},{0,1,0} };
         g.camera3Dptr = &cam3d;
 
         vi::gl::texture t = {};
@@ -1263,6 +1263,8 @@ namespace examples
         m[6].sca.x = 2;
         m[6].sca.y = 2;
         m[6].sca.z = 2;
+        m[0].data = 2;
+        m[1].color = { 1,0,0 };
 
         vi::input::keyboard k;
         k.init();        
@@ -1289,8 +1291,13 @@ namespace examples
             m[6].rot.x = timer.getGameTimeSec();
             m[6].rot.y = timer.getGameTimeSec();
             m[6].rot.z = timer.getGameTimeSec();
+
             for (uint i = 0; i < meshCount; i++)
+            {
+                if (i == 0) g.setWireframe();
+                else g.setSolid();
                 g.drawMesh(m + i);
+            }
 
             g.endScene();
         }
