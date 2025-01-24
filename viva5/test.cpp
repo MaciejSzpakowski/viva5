@@ -1,6 +1,7 @@
 #define VIVA_IMPL
 #define VI_VALIDATE
 #include "viva.h"
+#include "DirectXMath.h"
 
 namespace examples
 {
@@ -1182,6 +1183,34 @@ namespace examples
         vi::system::destroyWindow(&wnd);
     }
 
+    void matmul(float* a, float* b, float* r)
+    {
+        r[0] = a[0] * b[0] + a[1] * b[4] + a[2] * b[8] + a[3] * b[12];
+        r[1] = a[0] * b[1] + a[1] * b[5] + a[2] * b[9] + a[3] * b[13];
+        r[2] = a[0] * b[2] + a[1] * b[6] + a[2] * b[10] + a[3] * b[14];
+        r[3] = a[0] * b[3] + a[1] * b[7] + a[2] * b[11] + a[3] * b[15];
+
+        r[4] = a[4] * b[0] + a[5] * b[4] + a[6] * b[8] + a[7] * b[12];
+        r[5] = a[4] * b[1] + a[5] * b[5] + a[6] * b[9] + a[7] * b[13];
+        r[6] = a[4] * b[2] + a[5] * b[6] + a[6] * b[10] + a[7] * b[14];
+        r[7] = a[4] * b[3] + a[5] * b[7] + a[6] * b[11] + a[7] * b[15];
+
+        r[8] = a[8] * b[0] + a[9] * b[4] + a[10] * b[8] + a[11] * b[12];
+        r[9] = a[8] * b[1] + a[9] * b[5] + a[10] * b[9] + a[11] * b[13];
+        r[10] = a[8] * b[2] + a[9] * b[6] + a[10] * b[10] + a[11] * b[14];
+        r[11] = a[8] * b[3] + a[9] * b[7] + a[10] * b[11] + a[11] * b[15];
+
+        r[12] = a[12] * b[0] + a[13] * b[4] + a[14] * b[8] + a[15] * b[12];
+        r[13] = a[12] * b[1] + a[13] * b[5] + a[14] * b[9] + a[15] * b[13];
+        r[14] = a[12] * b[2] + a[13] * b[6] + a[14] * b[10] + a[15] * b[14];
+        r[15] = a[12] * b[3] + a[13] * b[7] + a[14] * b[11] + a[15] * b[15];
+    }
+
+    void vec3norm(float* a, float* r)
+    {
+
+    }
+
     void mesh()
     {
         vi::system::windowInfo winfo = {};
@@ -1263,7 +1292,7 @@ namespace examples
         m[6].sca.x = 2;
         m[6].sca.y = 2;
         m[6].sca.z = 2;
-        m[0].data = 2;
+        m[0].data = vi::gl::SPR_TEXTURE_BLANK | vi::gl::APPLY_TRANSFORM;
         m[1].color = { 1,0,0 };
 
         vi::input::keyboard k;
@@ -1274,30 +1303,40 @@ namespace examples
             timer.update();
             k.update();
             float f1 = 4;
-                if (k.isKeyDown('R'))
-                    cam3d.eye.z += timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('F'))
-                    cam3d.eye.z -= timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('A'))
-                    cam3d.eye.y += timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('D'))
-                    cam3d.eye.y -= timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('W'))
-                    cam3d.eye.x += timer.getTickTimeSec() * f1;
-                if (k.isKeyDown('S'))
-                    cam3d.eye.x -= timer.getTickTimeSec() * f1;
+            if (k.isKeyDown('R'))
+                cam3d.eye.z += timer.getTickTimeSec() * f1;
+            if (k.isKeyDown('F'))
+                cam3d.eye.z -= timer.getTickTimeSec() * f1;
+            if (k.isKeyDown('A'))
+                cam3d.eye.y += timer.getTickTimeSec() * f1;
+            if (k.isKeyDown('D'))
+                cam3d.eye.y -= timer.getTickTimeSec() * f1;
+            if (k.isKeyDown('W'))
+                cam3d.eye.x += timer.getTickTimeSec() * f1;
+            if (k.isKeyDown('S'))
+                cam3d.eye.x -= timer.getTickTimeSec() * f1;
 
             g.beginScene();
             m[6].rot.x = timer.getGameTimeSec();
             m[6].rot.y = timer.getGameTimeSec();
             m[6].rot.z = timer.getGameTimeSec();
 
-            for (uint i = 0; i < meshCount; i++)
-            {
-                if (i == 0) g.setWireframe();
-                else g.setSolid();
+            g.setWireframe();
+
+            // cpu side transform
+            // if transform is provided (float[16]) then it is used directly
+            DirectX::XMMATRIX world = DirectX::XMMatrixTranslation(0, 0, 15);
+            DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH({ cam3d.eye.x, cam3d.eye.y, cam3d.eye.z },
+                { cam3d.at.x,cam3d.at.y,cam3d.at.z },
+                { cam3d.up.x,cam3d.up.y,cam3d.up.z });
+            DirectX::XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(cam3d.fovy, cam3d.aspectRatio, cam3d.znear, cam3d.zfar);
+            DirectX::XMMATRIX transform = world * view * proj;
+            g.drawMesh(m, (float*)(&transform));
+
+            g.setSolid();
+
+            for (uint i = 1; i < meshCount; i++)
                 g.drawMesh(m + i);
-            }
 
             g.endScene();
         }

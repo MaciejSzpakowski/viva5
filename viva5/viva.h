@@ -607,6 +607,7 @@ namespace vi::system
 // d3d11
 namespace vi::gl
 {
+    const uint APPLY_TRANSFORM = 4;
     const uint SPR_TEXTURE_INVISIBLE = 1;
     const uint SPR_TEXTURE_BLANK = 2;
     const char rc_PixelShader[] = R"(
@@ -841,7 +842,7 @@ struct VS_OUTPUT
     uint4 data: COLOR2;
 };
 
-VS_OUTPUT main(VertexInputType data)
+float4x4 calcWorldViewProj()
 {
     float cr = cos(w.q1 * 0.5);
     float sr = sin(w.q1 * 0.5);
@@ -898,10 +899,21 @@ VS_OUTPUT main(VertexInputType data)
         0, 0, 1, 0
     };
 
+    float4x4 worldViewProj = mul(projMat, mul(viewMat, worldMat));
+    return worldViewProj;
+}
+
+VS_OUTPUT main(VertexInputType data)
+{    
 	float4 pos = float4(data.pos.x,data.pos.y,data.pos.z,1.0f);
 
 	VS_OUTPUT output;
-	output.Pos = mul(mul(projMat, mul(viewMat, worldMat)),pos);
+    
+    if(w.data & 4)
+	    output.Pos = mul(transform,pos);
+    else
+        output.Pos = mul(calcWorldViewProj(),pos);
+
 	output.Col = w.color;
     output.Col.a = 1;
 	output.TexCoord = float2(data.TexCoord[0],data.TexCoord[1]);
@@ -1395,6 +1407,7 @@ VS_OUTPUT main(VertexInputType data)
         ID3D11Buffer* cbufferVScamera;
         ID3D11Buffer* world;
         ID3D11Buffer* view;
+        ID3D11Buffer* transform;
         camera camera;
         camera3D* camera3Dptr;
         float backBufferColor[4];
@@ -1627,8 +1640,7 @@ VS_OUTPUT main(VertexInputType data)
             cbbd.Usage = D3D11_USAGE_DEFAULT;
             cbbd.ByteWidth = sizeof(camera);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
-            this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVScamera);
-            
+            this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVScamera);            
 
             // vs cbuffer for world view proj
             ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
@@ -1642,6 +1654,12 @@ VS_OUTPUT main(VertexInputType data)
             cbbd.ByteWidth = sizeof(camera3D);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->view);
+
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = sizeof(float) * 16;
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            this->device->CreateBuffer(&cbbd, NULL, &this->transform);
 
             /*ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
@@ -1685,6 +1703,12 @@ VS_OUTPUT main(VertexInputType data)
 
         void destroy()
         {
+            this->world->Release();
+            this->world = nullptr;
+            this->view->Release();
+            this->view = nullptr;
+            this->transform->Release();
+            this->transform = nullptr;
             this->inputLayout->Release();
             this->inputLayout = nullptr;
             this->cbufferVS->Release();
@@ -1847,7 +1871,7 @@ VS_OUTPUT main(VertexInputType data)
             this->context->Draw(6, 0);
         }
 
-        void drawMesh(mesh* m)
+        void drawMesh(mesh* m, float* transform = nullptr)
         {
             UINT stride = sizeof(vertex);
             UINT offset = 0;
@@ -1859,10 +1883,16 @@ VS_OUTPUT main(VertexInputType data)
                 this->context->VSSetShader(this->defaultMeshVS, 0, 0);
                 this->context->VSSetConstantBuffers(0, 1, &this->world);
                 this->context->VSSetConstantBuffers(1, 1, &this->view);
+                this->context->VSSetConstantBuffers(2, 1, &this->transform);
             }
 
-            if (m->t != nullptr) this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
+            if (m->t != nullptr) 
+                this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
+
             this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
+
+            if(transform)
+                this->context->UpdateSubresource(this->transform, 0, NULL, transform, 0, 0);
 
             if (m->indexBuffer)
             {
