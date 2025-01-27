@@ -910,9 +910,21 @@ VS_OUTPUT main(VertexInputType data)
 	VS_OUTPUT output;
     
     if(w.data & 4)
+    {
 	    output.Pos = mul(transform,pos);
+    }
+    else if(w.data & 8)
+    {
+        output.Pos = pos;
+        output.Col = float4(data.light,1);
+	    output.TexCoord = float2(data.TexCoord[0],data.TexCoord[1]);
+        output.data = uint4(w.data,0,0,0);
+	    return output;
+    }        
     else
+    {
         output.Pos = mul(calcWorldViewProj(),pos);
+    }
 
 	output.Col = w.color;
     output.Col.a = 1;
@@ -1408,6 +1420,7 @@ VS_OUTPUT main(VertexInputType data)
         ID3D11Buffer* world;
         ID3D11Buffer* view;
         ID3D11Buffer* transform;
+        ID3D11Buffer* dynamicVertexBuffer;
         camera camera;
         camera3D* camera3Dptr;
         float backBufferColor[4];
@@ -1661,6 +1674,13 @@ VS_OUTPUT main(VertexInputType data)
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->transform);
 
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DYNAMIC;
+            cbbd.ByteWidth = sizeof(vertex) * 15000;
+            cbbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+            cbbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+            this->device->CreateBuffer(&cbbd, NULL, &this->dynamicVertexBuffer);
+
             /*ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
             cbbd.ByteWidth = sizeof(camera);
@@ -1703,6 +1723,8 @@ VS_OUTPUT main(VertexInputType data)
 
         void destroy()
         {
+            this->dynamicVertexBuffer->Release();
+            this->dynamicVertexBuffer = nullptr;
             this->world->Release();
             this->world = nullptr;
             this->view->Release();
@@ -1891,8 +1913,11 @@ VS_OUTPUT main(VertexInputType data)
 
             this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
 
-            if(transform)
+            if (transform)
+            {
+                m->data |= APPLY_TRANSFORM;
                 this->context->UpdateSubresource(this->transform, 0, NULL, transform, 0, 0);
+            }
 
             if (m->indexBuffer)
             {
@@ -1901,8 +1926,45 @@ VS_OUTPUT main(VertexInputType data)
             }
             else
             {
-                this->context->Draw(m->vertexCount / 3, 0);
+                this->context->Draw(m->vertexCount, 0);
             }
+        }
+
+        /// <summary>
+        /// updates vertex data every call;
+        /// will use global dynamic vertex buffer;
+        /// won't use mesh's vertex buffer or index buffer;
+        /// slower than constant one;
+        /// no transform applied at the moment so pos xy must be in screen coordinates
+        /// </summary>
+        void drawMeshDynamic(mesh* m, uint vertexCount)
+        {
+            D3D11_MAPPED_SUBRESOURCE mappedResource;
+            ZeroMemory(&mappedResource, sizeof(D3D11_MAPPED_SUBRESOURCE));
+            //  Disable GPU access to the vertex buffer data.
+            this->context->Map(this->dynamicVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+            //  Update the vertex buffer here.
+            memcpy(mappedResource.pData, m->v, sizeof(vertex) * vertexCount);
+            //  Reenable GPU access to the vertex buffer data.
+            this->context->Unmap(this->dynamicVertexBuffer, 0);
+
+            if (this->drawingSprites)
+            {
+                this->drawingSprites = false;
+                this->context->VSSetShader(this->defaultMeshVS, 0, 0);
+                this->context->VSSetConstantBuffers(0, 1, &this->world);
+            }
+
+            if (m->t)
+                this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
+
+            m->data = 8;
+            this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
+
+            UINT stride = sizeof(vertex);
+            UINT offset = 0;
+            this->context->IASetVertexBuffers(0, 1, &this->dynamicVertexBuffer, &stride, &offset);
+            this->context->Draw(vertexCount, 0);
         }
 
         void endScene()
