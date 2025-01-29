@@ -1958,7 +1958,7 @@ VS_OUTPUT main(VertexInputType data)
             if (m->t)
                 this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
 
-            m->data = 8;
+            m->data |= 8;
             this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
 
             UINT stride = sizeof(vertex);
