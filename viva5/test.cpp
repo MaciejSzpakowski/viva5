@@ -1332,8 +1332,98 @@ namespace examples
         vi::system::destroyWindow(&wnd);
     }
 
+    void mesh2()
+    {
+        vi::system::windowInfo winfo = {};
+        winfo.width = 500;
+        winfo.height = 500;
+        winfo.title = "Mesh Test";
+        vi::system::window wnd;
+        vi::system::initWindow(&winfo, &wnd);
+        vi::gl::rendererInfo ginfo = {};
+        ginfo.wnd = &wnd;
+        ginfo.clearColor[0] = 47 / 255.0f;
+        ginfo.clearColor[1] = 79 / 255.0f;
+        ginfo.clearColor[2] = 79 / 255.0f;
+        ginfo.clearColor[3] = 1;
+        vi::gl::renderer g;
+        g.init(&ginfo);
+        g.setWireframe();
+
+        vi::gl::camera3D cam3d =
+        { 1,1,0.001f,1000.0f,{0,5,-5},{0,0,0},{0,1,0} };
+        g.camera3Dptr = &cam3d;
+
+        vi::gl::vertex v[3] = {
+           {0, -0.5f, -0.5f, 0.0f, 1.0f, 1,1,1},
+           {0, -0.5f, 0.5f, 0.0f, 0.0f,1,1,1},
+           {0, 1, 0, 1.0f, 0.0f,1,0,0}
+        };
+        DirectX::XMVECTOR v1[3] = {
+            {-0.5f, -0.5f, 0,1},
+            {0.5f, -0.5f, 0,1},
+            {0, 1, 0,1}
+        };
+        vi::gl::vertex v2[3] = {
+            {0,0,0,0,0,1,1,0},
+            {0,0,0,0,0,1,1,0},
+            {0,0,0,0,0,1,1,0},
+        };
+
+        vi::gl::mesh mesh;
+        g.initMesh(&mesh, v, 3, nullptr, 0, nullptr);
+        mesh.data = vi::gl::SPR_TEXTURE_BLANK | vi::gl::APPLY_TRANSFORM;
+        vi::gl::mesh dynMesh = {};
+        dynMesh.v = v2;
+        dynMesh.data = vi::gl::SPR_TEXTURE_BLANK;
+
+        vi::input::keyboard k;
+        k.init();
+        vi::input::mouse m;
+        m.init();
+
+        while (vi::system::updateWindow(&wnd))
+        {
+            k.update();
+            m.update(&wnd, nullptr);
+
+            static int angle = 0;
+            int dx, dy;
+            m.getCursorScreenDelta(&dx, &dy);
+            angle += dx;
+
+            g.beginScene();
+
+            DirectX::XMMATRIX world = DirectX::XMMatrixRotationY((angle + 0) * 3.141592f / 180.0f);
+            DirectX::XMMATRIX view = DirectX::XMMatrixLookAtLH({ cam3d.eye.x, cam3d.eye.y, cam3d.eye.z },
+                { cam3d.at.x,cam3d.at.y,cam3d.at.z },
+                { cam3d.up.x,cam3d.up.y,cam3d.up.z });
+            DirectX::XMMATRIX proj = DirectX::XMMatrixPerspectiveFovLH(cam3d.fovy, cam3d.aspectRatio, cam3d.znear, cam3d.zfar);
+            DirectX::XMMATRIX transform = (world * view * proj);
+
+            g.drawMesh(&mesh, (float*)(&transform));
+
+            for (uint i = 0; i < 3; i++)
+            {
+                auto transformed = DirectX::XMVector4Transform(v1[i], transform);
+                v2[i].pos.x = transformed.m128_f32[0] / transformed.m128_f32[3];
+                v2[i].pos.y = transformed.m128_f32[1] / transformed.m128_f32[3];
+                v2[i].pos.z = transformed.m128_f32[2] / transformed.m128_f32[3];
+            }
+
+            g.drawMeshDynamic(&dynMesh, 3);
+
+            g.endScene();
+        }
+
+        g.destroyMesh(&mesh);
+        g.destroy();
+        vi::system::destroyWindow(&wnd);
+    }
+
     int main()
     {
+        mesh2();
         mesh();
         basicSprite();
         moreSprites();
