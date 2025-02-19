@@ -2089,8 +2089,11 @@ VS_OUTPUT main(VertexInputType data)
 
         void destroyMesh(mesh* m)
         {
-            m->indexBuffer->Release();
-            m->indexBuffer = nullptr;
+            if (m->indexBuffer)
+            {
+                m->indexBuffer->Release();
+                m->indexBuffer = nullptr;
+            }
             m->vertexBuffer->Release();
             m->vertexBuffer = nullptr;
         }
@@ -2284,6 +2287,9 @@ namespace vi::input
             util::zero(this);
         }
 
+        /// <summary>
+        /// can pass null for camera but you wont get 2D world x and y
+        /// </summary>
         void update(system::window* w, gl::camera* c)
         {
             POINT p;
@@ -2301,8 +2307,11 @@ namespace vi::input
             this->_cursorClientx = p.x;
             this->_cursorClienty = p.y;
 
-            this->_cursorWorldx = ((float)this->_cursorClientx - w->width / 2) / w->width / c->scale * c->aspectRatio * 2 + c->x;
-            this->_cursorWorldy = ((float)this->_cursorClienty - w->height / 2) / w->height / c->scale * 2 + c->y;
+            if (c)
+            {
+                this->_cursorWorldx = ((float)this->_cursorClientx - w->width / 2) / w->width / c->scale * c->aspectRatio * 2 + c->x;
+                this->_cursorWorldy = ((float)this->_cursorClienty - w->height / 2) / w->height / c->scale * 2 + c->y;
+            }
         }
 
         // this is relative to monitor's upper left corner
