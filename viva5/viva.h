@@ -1811,7 +1811,7 @@ VS_OUTPUT main(VertexInputType data)
         // Difference between this and 'createTextureFromFile' is that file is in memory.
         // It's useful because you can have PNG or other encoded image in memory
         // and this can create texture from that. Supports lots of formats.
-        void createTextureFromInMemoryFile(texture* t, renderer* g, byte* file, int len)
+        void createTextureFromInMemoryFile(texture* t, byte* file, int len)
         {
             int x = -1, y = -1, n = -1;
             const int components = 4; // components means how many elements from 'RGBA'

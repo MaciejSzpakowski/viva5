@@ -1169,16 +1169,25 @@ namespace examples
         blank.init(nullptr);
         blank.s1.flags = vi::gl::SPR_TEXTURE_BLANK;
         blank.s2.col = { 0.5f,1.0f,0 };
+        vi::gl::texture t2;
+        byte bytes[] = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
+        g.createTextureFromBytes(&t2, bytes, 2, 2);
+        vi::gl::sprite s2;
+        s2.init(&t2);
+        s2.s2.pos = { 0.7f,0.7f,0 };
+        s2.s2.scale = { 0.2f,0.2f };
 
         while (vi::system::updateWindow(&wnd))
         {
             g.beginScene();
             g.drawSprite(&s);
             g.drawSprite(&blank);
+            g.drawSprite(&s2);
             g.endScene();
         }
 
         g.destroyTexture(&t);
+        g.destroyTexture(&t2);
         g.destroy();
         vi::system::destroyWindow(&wnd);
     }
