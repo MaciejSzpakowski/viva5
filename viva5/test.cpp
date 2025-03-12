@@ -704,7 +704,7 @@ namespace examples
         // subtract 3 because new line characters dont have corresponding sprites
         uint index = ptr - str;
         uint len2 = strlen("individually");
-        for (uint i = index; i < index + len2; i++) s[i].s2.col = { 1,0,0 };
+        for (uint i = index; i < index + len2; i++) s[i].s2.col = { 1,0,0,1 };
         
         auto loop = [&]()
         {
@@ -1024,7 +1024,7 @@ namespace examples
 #define MAKE_SPRITE(__x,__y,__rot,__sx,__sy,__r,__g,__b) { vi::gl::sprite* s = v.resources.addSprite(); \
         s->init(t); \
         v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f); \
-        s->s2.col = {__r,__g,__b}; \
+        s->s2.col = {__r,__g,__b,1}; \
         s->s2.pos = {__x,__y}; \
         s->s2.rot = __rot; \
         v.graphics.setPixelScale(s, 6 * __sx, 13 * __sy); }
@@ -1095,7 +1095,7 @@ namespace examples
         vi::gl::sprite* s = v.resources.addSprite(); \
         s->init(t); \
         v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f); \
-        s->s2.col = {__r,__g,__b}; \
+        s->s2.col = {__r,__g,__b,1}; \
         s->s2.pos = {__x,__y}; \
         s->s2.rot = __rot; \
         s->s2.origin = {0,0}; \
@@ -1147,7 +1147,7 @@ namespace examples
         vi::system::windowInfo winfo = {};
         winfo.width = 500;
         winfo.height = 500;
-        winfo.title = "Hello";
+        winfo.title = "Basic Sprite";
         vi::system::window wnd;
         vi::system::initWindow(&winfo, &wnd);
         vi::gl::rendererInfo ginfo = {};
@@ -1167,8 +1167,8 @@ namespace examples
         g.setPixelScale(&s, 6 * 10, 13 * 10);
         vi::gl::sprite blank;
         blank.init(nullptr);
-        blank.s1.flags = vi::gl::SPR_TEXTURE_BLANK;
-        blank.s2.col = { 0.5f,1.0f,0 };
+        blank.s1.notexture = 1;
+        blank.s2.col = { 0.5f,1.0f,0,1 };
         vi::gl::texture t2;
         byte bytes[] = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
         g.createTextureFromBytes(&t2, bytes, 2, 2);
@@ -1281,7 +1281,7 @@ namespace examples
         m[6].sca.x = 2;
         m[6].sca.y = 2;
         m[6].sca.z = 2;
-        m[0].data = vi::gl::SPR_TEXTURE_BLANK;
+        m[0].data = 2;
         m[1].color = { 1,0,0 };
 
         vi::input::keyboard k;
@@ -1381,10 +1381,10 @@ namespace examples
 
         vi::gl::mesh mesh;
         g.initMesh(&mesh, v, 3, nullptr, 0, nullptr);
-        mesh.data = vi::gl::SPR_TEXTURE_BLANK | vi::gl::APPLY_TRANSFORM;
+        mesh.data = 2 | vi::gl::APPLY_TRANSFORM;
         vi::gl::mesh dynMesh = {};
         dynMesh.v = v2;
-        dynMesh.data = vi::gl::SPR_TEXTURE_BLANK;
+        dynMesh.data = 2;
 
         vi::input::keyboard k;
         k.init();
@@ -1430,10 +1430,110 @@ namespace examples
         vi::system::destroyWindow(&wnd);
     }
 
-    int main()
+    void blendState()
     {
-        mesh2();
+        vi::system::windowInfo winfo = {};
+        winfo.width = 500;
+        winfo.height = 500;
+        winfo.title = "Blend State";
+        vi::system::window wnd;
+        vi::system::initWindow(&winfo, &wnd);
+        vi::gl::rendererInfo ginfo = {};
+        ginfo.wnd = &wnd;
+        ginfo.clearColor[0] = 47 / 255.0f;
+        ginfo.clearColor[1] = 79 / 255.0f;
+        ginfo.clearColor[2] = 79 / 255.0f;
+        ginfo.clearColor[3] = 1;
+        vi::gl::renderer g;
+        g.init(&ginfo);
+
+        vi::gl::texture t1;
+        g.createTextureFromFile(&t1, "./textures/b.png");
+
+        vi::gl::texture t2;
+        // water is 32bit transparent texture
+        g.createTextureFromFile(&t2, "./textures/water.png");
+
+        vi::gl::sprite s1;
+        s1.init(&t1);
+        s1.s1.z = 0.9f;
+        s1.s2.scale = { 1.6f,1.6f };
+
+        vi::gl::sprite s2;
+        s2.init(nullptr);
+        s2.s1.notexture = 1;
+        s2.s2.pos = { -0.6f,-0.6f,0.6f };
+        s2.s2.scale = { 0.5f,0.5f };
+        s2.s1.a = 0.8f;
+
+        vi::gl::sprite s3;
+        s3.init(nullptr);
+        s3.s1.notexture = 1;
+        s3.s2.pos = { -0.0f,-0.6f,0.6f };
+        s3.s2.scale = { 0.5f,0.5f };
+        s3.s1.a = 0.5f;
+
+        vi::gl::sprite s4;
+        s4.init(nullptr);
+        s4.s1.notexture = 1;
+        s4.s2.pos = { 0.6f,-0.6f,0.6f };
+        s4.s2.scale = { 0.5f,0.5f };
+        s4.s1.a = 0.3f;
+
+        vi::gl::sprite s5;
+        s5.init(nullptr);
+        s5.s1.notexture = 1;
+        s5.s2.pos = { -0.4f,-0.4f,0.4f };
+        s5.s2.scale = { 0.5f,0.5f };
+        s5.s1.a = 0.5f;
+
+        vi::gl::sprite s6;
+        s6.init(nullptr);
+        s6.s1.notexture = 1;
+        s6.s2.pos = { 0.4f,-0.4f,0.4f };
+        s6.s2.scale = { 0.5f,0.5f };
+        s6.s1.a = 0.5f;
+
+        vi::gl::sprite s7;
+        s7.init(&t2);
+        s7.s2.pos = { 0,0.5f,0.4f };
+
+        vi::input::keyboard k;
+        k.init();
+        vi::input::mouse m;
+        m.init();
+
+        while (vi::system::updateWindow(&wnd))
+        {
+            k.update();
+            m.update(&wnd, nullptr);
+
+            g.beginScene();
+
+            // draw back to front
+            g.disableBlendState();
+            g.drawSprite(&s1);
+            g.enableBlendState();
+            g.drawSprite(&s2);
+            g.drawSprite(&s3);
+            g.drawSprite(&s4);
+            g.drawSprite(&s5);
+            g.drawSprite(&s6);
+            g.drawSprite(&s7);
+
+
+            g.endScene();
+        }
+
+        g.destroy();
+        vi::system::destroyWindow(&wnd);
+    }
+
+    int main()
+    {        
+        blendState();
         mesh();
+        mesh2();
         basicSprite();
         moreSprites();
         timerMotionAnimation();

@@ -455,7 +455,7 @@ namespace vi::system
         fclose(file);
         block[it++] = 0;
 
-        if (outSize != nullptr)
+        if (outSize)
             *outSize = size - 1;
 
         return block;
@@ -553,7 +553,7 @@ namespace vi::system
         w->handle = CreateWindowEx(0, WND_CLASSNAME, info->title, wndStyle, 100, 100,
             r.right - r.left, r.bottom - r.top, 0, 0, w->hinstance, 0);
 #ifdef VI_VALIDATE
-        if (w->handle == nullptr)
+        if (!w->handle)
         {
             fprintf(stderr, "Failed to create window");
             exit(1);
@@ -608,11 +608,15 @@ namespace vi::system
 namespace vi::gl
 {
     const uint APPLY_TRANSFORM = 4;
-    const uint SPR_TEXTURE_INVISIBLE = 1;
-    const uint SPR_TEXTURE_BLANK = 2;
+    const uint psBufferSize = 16;
     const char rc_PixelShader[] = R"(
 Texture2D textures[1];
 SamplerState ObjSamplerState;
+
+cbuffer jedziemy
+{
+	bool notexture;
+};
 
 struct VS_OUTPUT
 {
@@ -629,42 +633,16 @@ float4 main(VS_OUTPUT input) : SV_TARGET
         discard;
         return float4(0,0,0,0);
     }
-    else if(input.data[0] & 2)
+    else if(notexture)
     {
-        return float4(input.Col.rgb, 1);
+        return float4(input.Col.rgba);
     }
     else
     {
 		float4 result = textures[0].Sample(ObjSamplerState, input.TexCoord);
-        // discard if alpha is less than 1
-        clip(result.a - 1.0f);
+        if(result.a == 0.0f)
+            discard;
 		return result * input.Col;
-    }
-}
-)";
-
-    const char rc_PostProcessing[] = R"(
-Texture2D ObjTexture;
-SamplerState ObjSamplerState;
-
-struct VS_OUTPUT
-{
-	float4 Pos : SV_POSITION;
-	float4 Col : COLOR;
-	float2 TexCoord : TEXCOORD;
-};
-
-float4 main(VS_OUTPUT input) : SV_TARGET
-{
-    if(input.Col.a < 0.01f)
-    {
-        discard;
-        return float4(0,0,0,0);
-    }
-    else
-    {
-	    float4 result = ObjTexture.Sample(ObjSamplerState, input.TexCoord);
-	    return result;
     }
 }
 )";
@@ -677,9 +655,7 @@ struct sprite
     float rot;
     float ox,oy;
     float4 uv;
-    float r,g,b;
-    uint flags;
-    float4 padding;
+    float4 color;
 };
 
 struct camera
@@ -691,12 +667,12 @@ struct camera
 	float scale;
 };
 
-cbuffer jedziemy
+cbuffer jedziemy: register(b0)
 {
 	sprite spr;
 };
 
-cbuffer poziolo
+cbuffer poziolo: register(b1)
 {
 	camera camObj;
 };
@@ -782,13 +758,11 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 	VS_OUTPUT output;
 	output.Pos = mul(mul(mul(mul(mul(cam,loc), rot), sca), ori), pos);
     output.Pos.z = spr.z;
-	output.Col = float4(spr.r, spr.g, spr.b, 1);
+	output.Col = spr.color;
     int u = uv[vid].x;
     int v = uv[vid].y;
     output.TexCoord = float2(spr.uv[u],spr.uv[v]);
     output.data = float4(0,0,0,0);
-    if(spr.flags & 1) output.Col.a = 0.0f;
-    output.data[0] = spr.flags;
 
 	return output;
 }
@@ -799,7 +773,7 @@ struct VertexInputType
 {
     float3 pos : POSITION;
     float2 TexCoord : TEXCOORD;
-    float3 light : LIGHT;
+    float4 light : LIGHT;
 };
 
 struct world
@@ -916,7 +890,7 @@ VS_OUTPUT main(VertexInputType data)
     else if(w.data & 8)
     {
         output.Pos = pos;
-        output.Col = float4(data.light,1);
+        output.Col = float4(data.light);
 	    output.TexCoord = float2(data.TexCoord[0],data.TexCoord[1]);
         output.data = uint4(w.data,0,0,0);
 	    return output;
@@ -985,7 +959,7 @@ VS_OUTPUT main(VertexInputType data)
 
     struct color
     {
-        float r, g, b;
+        float r, g, b, a;
     };
 
     struct uv
@@ -1003,14 +977,11 @@ VS_OUTPUT main(VertexInputType data)
 
     // WARNING !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // you updating something ? update shaders as well
-    // struct passed to uniform buffer must be multiple of 16bytes    
+    // struct passed to uniform buffer must be multiple of 16bytes
     struct sprite1
     {
-        // pos x
         float x;
-        // pos y
         float y;
-        // pos z
         float z;
         // scale x
         float sx;
@@ -1039,20 +1010,18 @@ VS_OUTPUT main(VertexInputType data)
 
         // 16 byte
 
-        // color red
         float r;
-        // color green
         float g;
-        // color blue
         float b;
-        // some extra settings
-        uint flags;
+        float a;
 
         // 16 byte
+        // some extra settings
+        uint nodraw : 1;
+        uint notexture : 1;
+        uint padding : 30;
 
         texture* t;
-        // padding because this truct must be multiple of 16bytes
-        byte padding[8];
     };
 
     struct sprite2
@@ -1065,7 +1034,6 @@ VS_OUTPUT main(VertexInputType data)
         color col;
         uint flags;
         texture* t;
-        byte padding[8];
     };
 
     // 16 bytes alignment, although I'm not sure it's necessary
@@ -1080,7 +1048,7 @@ VS_OUTPUT main(VertexInputType data)
         {
             vi::util::zero(this);
             this->s1.t = t;
-            this->s2.col = { 1,1,1 };
+            this->s2.col = { 1,1,1,1 };
             this->s2.scale = { 1,1 };
             this->s2.uv1 = { 0,0,1,1 };
         }
@@ -1275,13 +1243,13 @@ VS_OUTPUT main(VertexInputType data)
         void init(font* f, sprite* s, uint capacity, const char* str)
         {
 #ifdef VI_VALIDATE
-            if (f == nullptr || s == nullptr || capacity < 1 || str == nullptr)
+            if (!f || !s || capacity < 1 || !str)
             {
                 fprintf(stderr, "%s invalid argument\n", __func__);
                 return;
             }
 
-            if (f->tex == nullptr)
+            if (!f->tex)
             {
                 fprintf(stderr, "%s font has not texture\n", __func__);
                 return;
@@ -1299,7 +1267,7 @@ VS_OUTPUT main(VertexInputType data)
             {
                 vi::util::zero(s + i);
                 s[i].init(f->tex);
-                s[i].s2.col = { 0,0,0 };
+                s[i].s2.col = { 0,0,0,1 };
             }
         }
 
@@ -1315,13 +1283,13 @@ VS_OUTPUT main(VertexInputType data)
 
                 if (zero) 
                 { 
-                    this->s[i].s1.flags |= gl::SPR_TEXTURE_INVISIBLE;
+                    this->s[i].s1.nodraw = 1;
                 }
                 else if(this->str[i] == '\n')
                 {
                     x = this->s[0].s1.x;
                     y += this->s[0].s1.sy + this->verticalSpace;
-                    this->s[i].s1.flags |= gl::SPR_TEXTURE_INVISIBLE;
+                    this->s[i].s1.nodraw = true;
                     this->s[i].s2.scale = { 0,0 };
                 }
                 else
@@ -1332,7 +1300,7 @@ VS_OUTPUT main(VertexInputType data)
                     // set scale and origin equal to the first sprite in the set
                     this->s[i].s2.scale = this->s[0].s2.scale;
                     this->s[i].s2.origin = this->s[0].s2.origin;
-                    this->s[i].s1.flags &= ~gl::SPR_TEXTURE_INVISIBLE;
+                    this->s[i].s1.nodraw = 0;
 
                     x += this->s[0].s1.sx + this->horizontalSpace;
                 }
@@ -1407,7 +1375,6 @@ VS_OUTPUT main(VertexInputType data)
         ID3D11VertexShader* defaultVS;
         ID3D11VertexShader* defaultMeshVS;
         ID3D11PixelShader* defaultPS;
-        ID3D11PixelShader* defaultPost;
         ID3D11DepthStencilView* depthStencilView;
         ID3D11Texture2D* depthStencilBuffer;
         ID3D11InputLayout* inputLayout;
@@ -1416,11 +1383,13 @@ VS_OUTPUT main(VertexInputType data)
         ID3D11SamplerState* point;
         ID3D11SamplerState* linear;
         ID3D11Buffer* cbufferVS;
+        ID3D11Buffer* cbufferPS;
         ID3D11Buffer* cbufferVScamera;
         ID3D11Buffer* world;
         ID3D11Buffer* view;
         ID3D11Buffer* transform;
         ID3D11Buffer* dynamicVertexBuffer;
+        ID3D11BlendState* blendState;
         camera camera;
         camera3D* camera3Dptr;
         float backBufferColor[4];
@@ -1470,7 +1439,7 @@ VS_OUTPUT main(VertexInputType data)
             ID3D10Blob* ps;
             ID3D10Blob* errorMsg;
             HRESULT hr = D3DCompile(str, strlen(str), 0, 0, 0, entryPoint, target, 0, 0, &ps, &errorMsg);
-            if (errorMsg != nullptr)
+            if (errorMsg)
             {
                 void* ptr = errorMsg->GetBufferPointer();
                 uint sz = errorMsg->GetBufferSize();
@@ -1499,7 +1468,7 @@ VS_OUTPUT main(VertexInputType data)
             ID3D10Blob* errorMsg;
             HRESULT hr = D3DCompile(str, strlen(str), 0, 0, 0, entryPoint, target, 0, 0, &vs, &errorMsg);
 
-            if (errorMsg != nullptr)
+            if (errorMsg)
             {
                 void* ptr = errorMsg->GetBufferPointer();
                 uint sz = errorMsg->GetBufferSize();
@@ -1523,7 +1492,7 @@ VS_OUTPUT main(VertexInputType data)
                 {
                     {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
                     {"TEXCOORD",    0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0},
-                    {"LIGHT",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0},
+                    {"LIGHT",    0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0},
                 };
                 hr = this->device->CreateInputLayout(layout, 3, vs->GetBufferPointer(),
                     vs->GetBufferSize(), &this->inputLayout);
@@ -1618,36 +1587,42 @@ VS_OUTPUT main(VertexInputType data)
             viewport.MaxDepth = 1.0f;
             this->context->RSSetViewports(1, &viewport);
 
+            ////    BLEND STATE  ////
+            D3D11_BLEND_DESC blendDesc;
+            ZeroMemory(&blendDesc, sizeof(blendDesc));
+            D3D11_RENDER_TARGET_BLEND_DESC rtbd;
+            ZeroMemory(&rtbd, sizeof(rtbd));
+            rtbd.BlendEnable = true;
+            rtbd.SrcBlend = D3D11_BLEND_SRC_ALPHA;
+            rtbd.DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+            rtbd.BlendOp = D3D11_BLEND_OP_ADD;
+            rtbd.SrcBlendAlpha = D3D11_BLEND_ONE;
+            rtbd.DestBlendAlpha = D3D11_BLEND_ZERO;
+            rtbd.BlendOpAlpha = D3D11_BLEND_OP_ADD;
+            rtbd.RenderTargetWriteMask = D3D10_COLOR_WRITE_ENABLE_ALL;
+            //blendDesc.AlphaToCoverageEnable = false;
+            blendDesc.RenderTarget[0] = rtbd;
+            hr = this->device->CreateBlendState(&blendDesc, &this->blendState);
+
             ////    VS and PS    ////
             this->defaultVS = this->createVertexShaderFromString(rc_VertexShader, "main", "vs_5_0", false);
             this->defaultMeshVS = this->createVertexShaderFromString(rc_VertexShaderMesh, "main", "vs_5_0", true);
-            // now there is separate vs for sprite and for mesh so set it every draw call
-            //this->context->VSSetShader(this->defaultVS, 0, 0);
             this->defaultPS = this->createPixelShaderFromString(rc_PixelShader, "main", "ps_5_0");
-            this->defaultPost = this->createPixelShaderFromString(rc_PostProcessing, "main", "ps_5_0");
 
-            // vertex buffer for single instace i.e. UpdateSubresource
-#ifdef VI_VALIDATE
-            if (sizeof(sprite) % 16 != 0)
-            {
-                fprintf(stderr, "Sprite is not multiple of 16 bytes");
-                return;
-            }
-#endif
             D3D11_BUFFER_DESC cbbd;
             ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
             cbbd.ByteWidth = sizeof(sprite);
             cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
             this->device->CreateBuffer(&cbbd, NULL, &this->cbufferVS);
-            
-#ifdef VI_VALIDATE
-            if (sizeof(camera) % 16 != 0)
-            {
-                fprintf(stderr, "camera is not multiple of 16 bytes");
-                return;
-            }
-#endif
+
+            ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
+            cbbd.Usage = D3D11_USAGE_DEFAULT;
+            cbbd.ByteWidth = psBufferSize;
+            cbbd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+            this->device->CreateBuffer(&cbbd, NULL, &this->cbufferPS);
+            this->context->PSSetConstantBuffers(0, 1, &this->cbufferPS);
+
             // vertex buffer for camera also UpdateSubresource
             ZeroMemory(&cbbd, sizeof(D3D11_BUFFER_DESC));
             cbbd.Usage = D3D11_USAGE_DEFAULT;
@@ -1723,6 +1698,8 @@ VS_OUTPUT main(VertexInputType data)
 
         void destroy()
         {
+            this->blendState->Release();
+            this->blendState = nullptr;
             this->dynamicVertexBuffer->Release();
             this->dynamicVertexBuffer = nullptr;
             this->world->Release();
@@ -1745,8 +1722,8 @@ VS_OUTPUT main(VertexInputType data)
             this->wireframe = nullptr;
             this->solid->Release();
             this->solid = nullptr;
-            this->defaultPost->Release();
-            this->defaultPost = nullptr;
+            this->cbufferPS->Release();
+            this->cbufferPS = nullptr;
             this->defaultPS->Release();
             this->defaultPS = nullptr;
             this->defaultVS->Release();
@@ -1819,9 +1796,9 @@ VS_OUTPUT main(VertexInputType data)
             byte* data = stbi_load_from_memory(file, len, &x, &y, &n, components);
 
 #ifdef VI_VALIDATE
-            if (data == nullptr)
+            if (!data)
             {
-                fprintf(stderr, "createTexture could not open the file\n");
+                fprintf(stderr, "createTexture could not process in memory file\n");
                 exit(1);
             }
 #endif
@@ -1839,9 +1816,9 @@ VS_OUTPUT main(VertexInputType data)
             byte* data = stbi_load(filename, &x, &y, &n, components);
 
 #ifdef VI_VALIDATE
-            if (data == nullptr)
+            if (!data)
             {
-                fprintf(stderr, "createTexture could not open the file\n");
+                fprintf(stderr, "createTexture could not open the file %s\n", filename);
                 exit(1);
             }
 #endif
@@ -1878,7 +1855,7 @@ VS_OUTPUT main(VertexInputType data)
 
         void drawSprite(sprite* s)
         {
-            if (s->s1.flags & gl::SPR_TEXTURE_INVISIBLE) return;
+            if (s->s1.nodraw) return;
 
             if (!this->drawingSprites)
             {
@@ -1888,8 +1865,9 @@ VS_OUTPUT main(VertexInputType data)
                 this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
             }
 
-            if (s->s1.t != nullptr) this->context->PSSetShaderResources(0, 1, &s->s1.t->shaderResource);
+            if (s->s1.t) this->context->PSSetShaderResources(0, 1, &s->s1.t->shaderResource);
             this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
+            this->context->UpdateSubresource(this->cbufferPS, 0, 0, &s->s2.flags, 0, 0);
             this->context->Draw(6, 0);
         }
 
@@ -1908,7 +1886,7 @@ VS_OUTPUT main(VertexInputType data)
                 this->context->VSSetConstantBuffers(2, 1, &this->transform);
             }
 
-            if (m->t != nullptr) 
+            if (m->t) 
                 this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
 
             this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
@@ -2096,6 +2074,17 @@ VS_OUTPUT main(VertexInputType data)
             }
             m->vertexBuffer->Release();
             m->vertexBuffer = nullptr;
+        }
+
+        void enableBlendState()
+        {
+            float blendFactor[] = { 0, 0, 0, 0 };
+            this->context->OMSetBlendState(this->blendState, blendFactor, 0xffffffff);
+        }
+
+        void disableBlendState()
+        {
+            this->context->OMSetBlendState(0, 0, 0xffffffff);
         }
     };
 }
