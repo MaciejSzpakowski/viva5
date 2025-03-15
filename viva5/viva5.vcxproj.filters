@@ -23,5 +23,8 @@
     <ClInclude Include="viva.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="viva_impl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

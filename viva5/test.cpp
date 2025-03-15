@@ -1,6 +1,6 @@
-#define VIVA_IMPL
+
 #define VI_VALIDATE
-#include "viva.h"
+#include "viva_impl.h"
 #include "DirectXMath.h"
 
 namespace examples
@@ -127,7 +127,7 @@ namespace examples
             rInfo.clearColor[3] = 1;
             rInfo.wnd = &this->window;
 
-            vi::system::initWindow(&wInfo, &this->window);
+            this->window.init(&wInfo);
             this->keyboard.init();
             this->mouse.init();
             this->graphics.init(&rInfo);
@@ -154,12 +154,12 @@ namespace examples
 #endif // VI_VALIDATE
 
             this->graphics.destroy();
-            vi::system::destroyWindow(&this->window);
+            this->window.destroy();
         }
 
         void loop(std::function<void()> userLoop)
         {
-            while (vi::system::updateWindow(&this->window))
+            while (this->window.update())
             {
                 this->keyboard.update();
                 this->mouse.update(&this->window, &this->graphics.camera);
@@ -385,7 +385,7 @@ namespace examples
         winfo.height = 540;
         winfo.title = "Z Index";
         vi::system::window wnd;
-        vi::system::initWindow(&winfo, &wnd);
+        wnd.init(&winfo);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
         ginfo.clearColor[0] = 47 / 255.0f;
@@ -407,7 +407,7 @@ namespace examples
             g.setPixelScale(s + i, 80, 80);
         }
 
-        while (vi::system::updateWindow(&wnd))
+        while (wnd.update())
         {
             g.beginScene();
             for (uint i = 0; i < 10; i++)
@@ -417,7 +417,7 @@ namespace examples
 
         g.destroyTexture(&t);
         g.destroy();
-        vi::system::destroyWindow(&wnd);
+        wnd.destroy();
     }
 
     // get some cursor data
@@ -1149,7 +1149,7 @@ namespace examples
         winfo.height = 500;
         winfo.title = "Basic Sprite";
         vi::system::window wnd;
-        vi::system::initWindow(&winfo, &wnd);
+        wnd.init(&winfo);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
         ginfo.clearColor[0] = 47 / 255.0f;
@@ -1177,7 +1177,7 @@ namespace examples
         s2.s2.pos = { 0.7f,0.7f,0 };
         s2.s2.scale = { 0.2f,0.2f };
 
-        while (vi::system::updateWindow(&wnd))
+        while (wnd.update())
         {
             g.beginScene();
             g.drawSprite(&s);
@@ -1189,7 +1189,7 @@ namespace examples
         g.destroyTexture(&t);
         g.destroyTexture(&t2);
         g.destroy();
-        vi::system::destroyWindow(&wnd);
+        wnd.destroy();
     }
 
     void mesh()
@@ -1199,7 +1199,7 @@ namespace examples
         winfo.height = 500;
         winfo.title = "Cube";
         vi::system::window wnd;
-        vi::system::initWindow(&winfo, &wnd);
+        wnd.init(&winfo);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
         ginfo.clearColor[0] = 47 / 255.0f;
@@ -1287,7 +1287,7 @@ namespace examples
         vi::input::keyboard k;
         k.init();        
 
-        while (vi::system::updateWindow(&wnd))
+        while (wnd.update())
         {
             timer.update();
             k.update();
@@ -1338,7 +1338,7 @@ namespace examples
             g.destroyMesh(m + i);
         }
         g.destroy();
-        vi::system::destroyWindow(&wnd);
+        wnd.destroy();
     }
 
     void mesh2()
@@ -1348,7 +1348,7 @@ namespace examples
         winfo.height = 500;
         winfo.title = "Mesh Test";
         vi::system::window wnd;
-        vi::system::initWindow(&winfo, &wnd);
+        wnd.init(&winfo);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
         ginfo.clearColor[0] = 47 / 255.0f;
@@ -1364,9 +1364,9 @@ namespace examples
         g.camera3Dptr = &cam3d;
 
         vi::gl::vertex v[3] = {
-           {0, -0.5f, -0.5f, 0.0f, 1.0f, 1,1,1},
-           {0, -0.5f, 0.5f, 0.0f, 0.0f,1,1,1},
-           {0, 1, 0, 1.0f, 0.0f,1,0,0}
+           {0, -0.5f, -0.5f, 0.0f, 1.0f, 1,1,1,1},
+           {0, -0.5f, 0.5f, 0.0f, 0.0f,1,1,1,1},
+           {0, 1, 0, 1.0f, 0.0f,1,0,0,1}
         };
         DirectX::XMVECTOR v1[3] = {
             {-0.5f, -0.5f, 0,1},
@@ -1374,9 +1374,9 @@ namespace examples
             {0, 1, 0,1}
         };
         vi::gl::vertex v2[3] = {
-            {0,0,0,0,0,1,1,0},
-            {0,0,0,0,0,1,1,0},
-            {0,0,0,0,0,1,1,0},
+            {0,0,0,0,0,1,1,0,1},
+            {0,0,0,0,0,1,1,0,1},
+            {0,0,0,0,0,1,1,0,1},
         };
 
         vi::gl::mesh mesh;
@@ -1391,7 +1391,7 @@ namespace examples
         vi::input::mouse m;
         m.init();
 
-        while (vi::system::updateWindow(&wnd))
+        while (wnd.update())
         {
             k.update();
             m.update(&wnd, nullptr);
@@ -1427,7 +1427,7 @@ namespace examples
 
         g.destroyMesh(&mesh);
         g.destroy();
-        vi::system::destroyWindow(&wnd);
+        wnd.destroy();
     }
 
     void blendState()
@@ -1437,7 +1437,7 @@ namespace examples
         winfo.height = 500;
         winfo.title = "Blend State";
         vi::system::window wnd;
-        vi::system::initWindow(&winfo, &wnd);
+        wnd.init(&winfo);
         vi::gl::rendererInfo ginfo = {};
         ginfo.wnd = &wnd;
         ginfo.clearColor[0] = 47 / 255.0f;
@@ -1503,7 +1503,7 @@ namespace examples
         vi::input::mouse m;
         m.init();
 
-        while (vi::system::updateWindow(&wnd))
+        while (wnd.update())
         {
             k.update();
             m.update(&wnd, nullptr);
@@ -1526,16 +1526,16 @@ namespace examples
         }
 
         g.destroy();
-        vi::system::destroyWindow(&wnd);
+        wnd.destroy();
     }
 
     int main()
     {        
-        blendState();
         mesh();
         mesh2();
         basicSprite();
         moreSprites();
+        blendState();
         timerMotionAnimation();
         performance();
         keyboardMultipleAnimationsMath();
