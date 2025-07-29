@@ -733,63 +733,76 @@ namespace examples
     // zooming should be towards the center of the screen
     void camera()
     {
-        viva v;        
-
-        vivaInfo info;
-        info.width = 960;
-        info.height = 540;
-        info.title = "Camera";
-        v.init(&info);
-
-        vi::gl::texture* t = v.resources.addTexture();
-        v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
-
-        vi::gl::sprite* s1 = v.resources.addSprite();
-        s1->init(t);
-        s1->s2.pos = { -1,-1 };
-        v.graphics.setUvFromPixels(s1, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
-        v.graphics.setPixelScale(s1, 6 * 10, 13 * 10);
-
-        vi::gl::sprite* s2 = v.resources.addSprite();
-        s2->init(t);
-        s2->s2.pos = { 1,-1 };
-        v.graphics.setUvFromPixels(s2, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
-        v.graphics.setPixelScale(s2, 6 * 10, 13 * 10);
-
-        vi::gl::sprite* s3 = v.resources.addSprite();
-        s3->init(t);
-        s3->s2.pos = { -1,1 };
-        v.graphics.setUvFromPixels(s3, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
-        v.graphics.setPixelScale(s3, 6 * 10, 13 * 10);
-
-        vi::gl::sprite* s4 = v.resources.addSprite();
-        s4->init(t);
-        s4->s2.pos = { 1,1 };
-        v.graphics.setUvFromPixels(s4, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
-        v.graphics.setPixelScale(s4, 6 * 10, 13 * 10);
-
-        vi::gl::sprite* s5 = v.resources.addSprite();
-        s5->init(t);
-        v.graphics.setUvFromPixels(s5, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
-        v.graphics.setPixelScale(s5, 6 * 10, 13 * 10);
-
-        auto loop = [&]()
+        // internal viva camera is worldview
+        // the second camera is screen view (x,y and scale never changes)
+        vi::time::timer timer;
+        vi::input::keyboard keyboard;
+        keyboard.init();
+        timer.init();
+        vi::system::windowInfo winfo = {};
+        winfo.width = 960;
+        winfo.height = 540;
+        vi::gl::camera screenView = {};
+        screenView.scale = 1;
+        screenView.aspectRatio = 960.0f / 540.0f;
+        winfo.title = "Camera";
+        vi::system::window wnd;
+        wnd.init(&winfo);
+        vi::gl::rendererInfo ginfo = {};
+        ginfo.wnd = &wnd;
+        ginfo.clearColor[0] = 47 / 255.0f;
+        ginfo.clearColor[1] = 79 / 255.0f;
+        ginfo.clearColor[2] = 79 / 255.0f;
+        ginfo.clearColor[3] = 1;
+        vi::gl::renderer g;
+        g.init(&ginfo);
+        vi::gl::texture t;
+        g.createTextureFromFile(&t, "textures/0x72_DungeonTilesetII_v1.png");
+        t.index = 0;
+        vi::gl::sprite s[6];
+        for (int i = 0; i < 6; i++)
         {
-            float frameTime = v.timer.getTickTimeSec();
+            s[i].init(&t);
+            g.setUvFromPixels(s + i, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+            g.setPixelScale(s + i, 6 * 10, 13 * 10);
+        }
+        // move worldview
+        s[0].s1.z = 0.5f;
+        s[1].s2.pos = { -1,-1,0.5f };
+        s[2].s2.pos = { 1,-1,0.5f };
+        s[3].s2.pos = { -1, 1,0.5f };
+        s[4].s2.pos = { 1,1,0.5f };
+        g.setScreenPos2(s + 5, 20, 20);
+        s[5].s2.origin = { -0.5f,-0.5f };
 
-            if (v.keyboard.isKeyDown('A')) v.graphics.camera.x -= frameTime;
-            else if (v.keyboard.isKeyDown('D')) v.graphics.camera.x += frameTime;
+        while (wnd.update())
+        {
+            timer.update();
+            float frameTime = timer.getTickTimeSec();
+            keyboard.update();
 
-            if (v.keyboard.isKeyDown('W')) v.graphics.camera.y -= frameTime;
-            else if (v.keyboard.isKeyDown('S')) v.graphics.camera.y += frameTime;
+            if (keyboard.isKeyDown('A')) g.camera.x -= frameTime;
+            else if (keyboard.isKeyDown('D')) g.camera.x += frameTime;
 
-            if (v.keyboard.isKeyDown('Q')) v.graphics.camera.scale *= 1 - frameTime * .3f;
-            else if (v.keyboard.isKeyDown('E')) v.graphics.camera.scale *= 1 + frameTime * .3f;
-        };
+            if (keyboard.isKeyDown('W')) g.camera.y -= frameTime;
+            else if (keyboard.isKeyDown('S')) g.camera.y += frameTime;
 
-        v.loop(loop);
+            if (keyboard.isKeyDown('Q')) g.camera.scale *= 1 - frameTime * .3f;
+            else if (keyboard.isKeyDown('E')) g.camera.scale *= 1 + frameTime * .3f;
 
-        v.destroy();
+            g.beginScene();
+            // render worldview first (aka g.camera)
+            for (int i = 0; i < 5; i++)
+                g.drawSprite(s + i);
+            // change camera to screenview (aka camera2)
+            g.updateCamera(&screenView);
+            g.drawSprite(s + 5);
+            g.endScene();
+        }
+
+        g.destroyTexture(&t);
+        g.destroy();
+        wnd.destroy();
     }
     
     // just to make sure they still work

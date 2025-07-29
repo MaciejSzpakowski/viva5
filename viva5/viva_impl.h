@@ -1709,6 +1709,11 @@ VS_OUTPUT main(VertexInputType data)
                 this->context->UpdateSubresource(this->view, 0, NULL, this->camera3Dptr, 0, 0);
         }
 
+        void updateCamera(gl::camera* c)
+        {
+            this->context->UpdateSubresource(this->cbufferVScamera, 0, NULL, c, 0, 0);
+        }
+
         void drawSprite(sprite* s)
         {
             if (s->s1.nodraw) return;
@@ -1849,6 +1854,20 @@ VS_OUTPUT main(VertexInputType data)
         {
             s->s1.x = 2.0f / this->window->width * (pixelx - this->window->width / 2.0f) / this->camera.scale * this->camera.aspectRatio;
             s->s1.y = 2.0f / this->window->height * (pixely - this->window->height / 2.0f) / this->camera.scale;
+        }
+
+        // 'pixelWidth' and 'pixelHeight' are dimensions in pixel, camera independent
+        void setPixelScale2(sprite* s, uint pixelWidth, uint pixelHeight)
+        {
+            s->s1.sx = 2.0f / this->window->width * pixelWidth * this->window->width / (float)this->window->height;
+            s->s1.sy = 2.0f / this->window->height * pixelHeight;
+        }
+
+        // 'pixelx' and 'pixely' are window coordinates in pixels (0,0) is in upper left corner, camera independent
+        void setScreenPos2(sprite* s, uint pixelx, uint pixely)
+        {
+            s->s1.x = 2.0f / this->window->width * (pixelx - this->window->width / 2.0f) * this->window->width / (float)this->window->height;
+            s->s1.y = 2.0f / this->window->height * (pixely - this->window->height / 2.0f);
         }
 
         // puts width and height in world coordinates of 1px in f[0] and f[1]
