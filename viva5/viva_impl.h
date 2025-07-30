@@ -571,16 +571,26 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 		0, 0, 1, 0,
 		0, 0, 0, 1
 	);
-    // fixed means ignore camera except for aspect ratio
-    //if(spr.fixed)
-    //{
-    //   cam = mat4(
-	//	1/ubo.cam.aspectRatio, 0, 0, 0,
-	//	0, 1, 0, 0,
-	//	0, 0, 1, 0,
-	//	0, 0, 0, 1
-	//);
-    //}
+
+    // hack do draw a line because I dont want to write a new VS for this
+    if(spr.z < 0)
+    {
+        // this is for point A
+        float4 pos = float4(spr.x,spr.y,0,1.0f);
+        // this is for point B
+        if(vid > 0)
+            pos = float4(spr.sx,spr.sy,0,1.0f);
+        VS_OUTPUT output;
+	    output.Pos = mul(cam, pos);
+        output.Pos.z = -spr.z;
+        if(vid > 0)
+            output.Pos.z = -spr.rot;
+	    output.Col = spr.color;
+        output.TexCoord = float2(0,0);
+        output.data = float4(0,0,0,0);
+	    return output;
+    }
+
 	// origin
 	float4x4 ori = float4x4(
 		1, 0, 0, -spr.ox,
@@ -892,12 +902,33 @@ VS_OUTPUT main(VertexInputType data)
         texture* t;
     };
 
+    struct line
+    {
+        float x1;
+        float y1;
+        float z1;
+        float x2;
+        float y2;
+        float z2;
+        float _1;
+        float _2;
+        float _3;
+        float _4;
+        float _5;
+        float _6;
+        float r;
+        float g;
+        float b;
+        float a;
+    };
+
     // 16 bytes alignment, although I'm not sure it's necessary
     _declspec(align(16))
         union sprite
     {
         sprite1 s1;
         sprite2 s2;
+        line line;
 
         // makes minimum changes to make object show when drawn
         void init(texture* t)
@@ -1728,8 +1759,35 @@ VS_OUTPUT main(VertexInputType data)
 
             if (s->s1.t) this->context->PSSetShaderResources(0, 1, &s->s1.t->shaderResource);
             this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
-            this->context->UpdateSubresource(this->cbufferPS, 0, 0, &s->s2.flags, 0, 0);
-            this->context->Draw(6, 0);
+            this->context->UpdateSubresource(this->cbufferPS, 0, 0, &s->s2.flags, 0, 0);            
+            this->context->Draw(6, 0);            
+        }
+
+        /// <summary>
+        /// use 'line' component of 'sprite';
+        /// only static line at this point;
+        /// line cannot be scaled, moved or rotated;
+        /// position of end points still exists in world space so it's affected by camera scale and pos
+        /// REMEMBER TO SET WIREFRAME
+        /// </summary>
+        void drawLine(sprite* s)
+        {
+            if (!this->drawingSprites)
+            {
+                this->drawingSprites = true;
+                this->context->VSSetShader(this->defaultVS, 0, 0);
+                this->context->VSSetConstantBuffers(0, 1, &this->cbufferVS);
+                this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
+            }
+
+            // 4 uints because min size is 16 bytes
+            uint flags[4] = { 2 }; // notexture flag on
+            s->s1.z -= 1.0f;
+            this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
+            s->s1.z += 1.0f;
+            this->context->UpdateSubresource(this->cbufferPS, 0, 0, &flags, 0, 0);
+
+            this->context->Draw(3, 0);
         }
 
         void drawMesh(mesh* m, float* transform = nullptr)

@@ -729,6 +729,53 @@ namespace examples
         v.destroy();
     }
 
+    void lines()
+    {
+        vi::time::timer timer;
+        vi::input::keyboard keyboard;
+        keyboard.init();
+        timer.init();
+        vi::system::windowInfo winfo = { 500,500,"Lines" };
+        vi::system::window wnd;
+        wnd.init(&winfo);
+        vi::gl::rendererInfo ginfo = { &wnd,{47 / 255.0f,79 / 255.0f,79 / 255.0f,1} };
+        vi::gl::renderer g;
+        g.init(&ginfo);
+        vi::gl::sprite s = {};
+        s.line.x1 = 0;
+        s.line.y1 = 0;
+        s.line.x2 = 1;
+        s.line.y2 = 0.5f;
+        s.line.r = 1;
+        s.line.g = 0;
+        s.line.b = 1;
+        s.line.a = 1;
+
+        while (wnd.update())
+        {
+            timer.update();
+            float frameTime = timer.getTickTimeSec();
+            keyboard.update();
+
+            if (keyboard.isKeyDown('A')) g.camera.x -= frameTime;
+            else if (keyboard.isKeyDown('D')) g.camera.x += frameTime;
+
+            if (keyboard.isKeyDown('W')) g.camera.y -= frameTime;
+            else if (keyboard.isKeyDown('S')) g.camera.y += frameTime;
+
+            if (keyboard.isKeyDown('Q')) g.camera.scale *= 1 - frameTime * .3f;
+            else if (keyboard.isKeyDown('E')) g.camera.scale *= 1 + frameTime * .3f;
+
+            g.beginScene();
+            g.setWireframe();
+            g.drawLine(&s);
+            g.endScene();
+        }
+
+        g.destroy();
+        wnd.destroy();
+    }
+
     // move camera with WSAD zoom Q/E
     // zooming should be towards the center of the screen
     void camera()
@@ -1467,6 +1514,10 @@ namespace examples
         // water is 32bit transparent texture
         g.createTextureFromFile(&t2, "./textures/water.png");
 
+        vi::gl::texture t3;
+        byte t3data[] = { 0,0,0,255,0,0,0,255,0,0,0,255,255,255,255,255 };
+        g.createTextureFromBytes(&t3, t3data, 2, 2);
+
         vi::gl::sprite s1;
         s1.init(&t1);
         s1.s1.z = 0.9f;
@@ -1508,7 +1559,7 @@ namespace examples
         s6.s1.a = 0.5f;
 
         vi::gl::sprite s7;
-        s7.init(&t2);
+        s7.init(&t3);
         s7.s2.pos = { 0,0.5f,0.4f };
 
         vi::input::keyboard k;
@@ -1543,7 +1594,8 @@ namespace examples
     }
 
     int main()
-    {        
+    {
+        lines();
         mesh();
         mesh2();
         basicSprite();
