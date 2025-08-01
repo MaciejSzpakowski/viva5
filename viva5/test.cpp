@@ -729,6 +729,133 @@ namespace examples
         v.destroy();
     }
 
+    void customVS()
+    {
+        // custom VS still must conform to layout and buffer names
+        // so struct sprite, struct camera, cbuffer1, cbuffer2, struct VS_OUTPUT must be the same for all VS
+        // main function must be called 'main'
+        const char customVSSoure[] = R"(
+struct sprite
+{
+    float x,y,z;
+    float sx,sy;
+    float rot;
+    float ox,oy;
+    float4 uv;
+    float4 color;
+};
+
+struct camera
+{
+	float aspectRatio;
+	float x;
+	float y;
+	float rotation;
+	float scale;
+};
+
+cbuffer jedziemy: register(b0)
+{
+	sprite spr;
+};
+
+cbuffer poziolo: register(b1)
+{
+	camera camObj;
+};
+
+struct VS_OUTPUT
+{
+	float4 Pos : SV_POSITION;
+	float4 Col : COLOR;
+	float2 TexCoord : TEXCOORD;
+    uint4 data: COLOR2;
+};
+
+static float4 vertices[6] = {
+    float4(0, 0, 1.0f, 1.0f),
+    float4(1, 0, 0.0f, 1.0f),
+    float4(0.5f, 0.3f, 1.0f, 0.0f),
+    float4(0, 0, 1.0f, 0.0f),
+    float4(0.5f, -0.3f, 0.0f, 1.0f),
+	float4(1, 0, 0.0f, 0.0f)
+};
+
+VS_OUTPUT main(uint vid : SV_VertexID)
+{
+	// camera
+    // that is correct camera transformation
+    // includes aspect ratio adjustment and it FIRST moves camera to postion and then scales
+    // so when zooming, it always zooms around the center of the screen
+	float4x4 cam = float4x4(
+		1/camObj.aspectRatio * camObj.scale, 0, 0, 1/camObj.aspectRatio * camObj.scale * -camObj.x,
+		0, camObj.scale, 0, -camObj.scale * -camObj.y,
+		0, 0, 1, 0,
+		0, 0, 0, 1
+	);
+	// loc
+	float4x4 loc = float4x4(
+		1, 0, 0, spr.x,
+		0, 1, 0, -spr.y,
+		0, 0, 1, 0,
+		0, 0, 0, 1 // z from transform is not put over here because it's on the vertex itself
+	);
+	float4 pos = float4(vertices[vid].x,vertices[vid].y,0,1.0f);
+
+	VS_OUTPUT output;
+	output.Pos = mul((((mul(cam,loc)))), pos);
+    output.Pos.z = spr.z;
+	output.Col = float4(0.5f,0.7f,1,1);
+    output.TexCoord = float2(0,0);
+    output.data = float4(0,0,0,0);
+
+	return output;
+}
+)";
+
+        vi::system::windowInfo winfo = { 500, 500, "Custom Vertex Shader" };
+        vi::system::window wnd;
+        wnd.init(&winfo);
+        vi::gl::rendererInfo ginfo = { &wnd,{47 / 255.0f,79 / 255.0f, 79 / 255.0,1} };
+        vi::gl::renderer g;
+        g.init(&ginfo);
+        vi::gl::texture t;
+        g.createTextureFromFile(&t, "textures/0x72_DungeonTilesetII_v1.png");
+        t.index = 0;
+        vi::gl::sprite s;
+        s.init(&t);
+        g.setUvFromPixels(&s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
+        g.setPixelScale(&s, 6 * 10, 13 * 10);
+
+        vi::gl::sprite diamond[6];
+        for (uint i = 0; i < 6; i++)
+            diamond[i].init(nullptr);
+        diamond[0].s2.pos = { -1,0.6f,0.5f };
+        diamond[1].s2.pos = { -1,0,0.5f };
+        diamond[2].s2.pos = { -1,-0.6f,0.5f };
+        diamond[3].s2.pos = { 0,0.6f,0.5f };
+        diamond[4].s2.pos = { 0,0,0.5f };
+        diamond[5].s2.pos = { 0,-0.6f,0.5f };
+
+        ID3D11VertexShader* customVS = g.createVertexShader(customVSSoure);
+
+        while (wnd.update())
+        {
+            g.beginScene();
+            g.setDefaultSpriteVS();
+            g.drawSprite(&s);
+            g.setSpriteVS(customVS);
+            for (uint i = 0; i < 6; i++)
+                g.drawSprite(diamond + i);
+            g.endScene();
+        }
+
+        g.destroyVertexShader(customVS);
+        g.destroyTexture(&t);
+        g.destroy();
+        wnd.destroy();
+    }
+
     void lines()
     {
         vi::time::timer timer;
@@ -1204,18 +1331,10 @@ namespace examples
 
     void basicSprite()
     {
-        vi::system::windowInfo winfo = {};
-        winfo.width = 500;
-        winfo.height = 500;
-        winfo.title = "Basic Sprite";
+        vi::system::windowInfo winfo = { 500, 500, "Basic Sprite"};
         vi::system::window wnd;
         wnd.init(&winfo);
-        vi::gl::rendererInfo ginfo = {};
-        ginfo.wnd = &wnd;
-        ginfo.clearColor[0] = 47 / 255.0f;
-        ginfo.clearColor[1] = 79 / 255.0f;
-        ginfo.clearColor[2] = 79 / 255.0f;
-        ginfo.clearColor[3] = 1;
+        vi::gl::rendererInfo ginfo = { &wnd,{47 / 255.0f,79 / 255.0f, 79 / 255.0,1} };
         vi::gl::renderer g;
         g.init(&ginfo);
         vi::gl::texture t;
@@ -1227,7 +1346,6 @@ namespace examples
         g.setPixelScale(&s, 6 * 10, 13 * 10);
         vi::gl::sprite blank;
         blank.init(nullptr);
-        blank.s1.notexture = 1;
         blank.s2.col = { 0.5f,1.0f,0,1 };
         vi::gl::texture t2;
         byte bytes[] = { 255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,0,255 };
@@ -1525,35 +1643,30 @@ namespace examples
 
         vi::gl::sprite s2;
         s2.init(nullptr);
-        s2.s1.notexture = 1;
         s2.s2.pos = { -0.6f,-0.6f,0.6f };
         s2.s2.scale = { 0.5f,0.5f };
         s2.s1.a = 0.8f;
 
         vi::gl::sprite s3;
         s3.init(nullptr);
-        s3.s1.notexture = 1;
         s3.s2.pos = { -0.0f,-0.6f,0.6f };
         s3.s2.scale = { 0.5f,0.5f };
         s3.s1.a = 0.5f;
 
         vi::gl::sprite s4;
         s4.init(nullptr);
-        s4.s1.notexture = 1;
         s4.s2.pos = { 0.6f,-0.6f,0.6f };
         s4.s2.scale = { 0.5f,0.5f };
         s4.s1.a = 0.3f;
 
         vi::gl::sprite s5;
         s5.init(nullptr);
-        s5.s1.notexture = 1;
         s5.s2.pos = { -0.4f,-0.4f,0.4f };
         s5.s2.scale = { 0.5f,0.5f };
         s5.s1.a = 0.5f;
 
         vi::gl::sprite s6;
         s6.init(nullptr);
-        s6.s1.notexture = 1;
         s6.s2.pos = { 0.4f,-0.4f,0.4f };
         s6.s2.scale = { 0.5f,0.5f };
         s6.s1.a = 0.5f;
@@ -1595,10 +1708,11 @@ namespace examples
 
     int main()
     {
+        customVS();
+        basicSprite();
         lines();
         mesh();
         mesh2();
-        basicSprite();
         moreSprites();
         blendState();
         timerMotionAnimation();

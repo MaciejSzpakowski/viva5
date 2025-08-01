@@ -884,6 +884,9 @@ VS_OUTPUT main(VertexInputType data)
         // 16 byte
         // some extra settings
         uint nodraw : 1;
+        /// <summary>
+        /// no need to set manually, set to true if no texture on sprite
+        /// </summary>
         uint notexture : 1;
         uint padding : 30;
 
@@ -1261,6 +1264,7 @@ VS_OUTPUT main(VertexInputType data)
         ID3D11DeviceContext* context;
         ID3D11VertexShader* defaultVS;
         ID3D11VertexShader* defaultMeshVS;
+        ID3D11VertexShader* currentVS;
         ID3D11PixelShader* defaultPS;
         ID3D11DepthStencilView* depthStencilView;
         ID3D11Texture2D* depthStencilBuffer;
@@ -1370,6 +1374,7 @@ VS_OUTPUT main(VertexInputType data)
                 this->checkhr(hr, __LINE__);
             }
 
+            // have to do this only once
             if (setInputLayout)
             {
                 //// VERTEX LAYOUT ////
@@ -1493,6 +1498,7 @@ VS_OUTPUT main(VertexInputType data)
 
             ////    VS and PS    ////
             this->defaultVS = this->createVertexShaderFromString(rc_VertexShader, "main", "vs_5_0", false);
+            this->currentVS = this->defaultVS;
             this->defaultMeshVS = this->createVertexShaderFromString(rc_VertexShaderMesh, "main", "vs_5_0", true);
             this->defaultPS = this->createPixelShaderFromString(rc_PixelShader, "main", "ps_5_0");
 
@@ -1752,12 +1758,13 @@ VS_OUTPUT main(VertexInputType data)
             if (!this->drawingSprites)
             {
                 this->drawingSprites = true;
-                this->context->VSSetShader(this->defaultVS, 0, 0);
+                this->context->VSSetShader(this->currentVS, 0, 0);
                 this->context->VSSetConstantBuffers(0, 1, &this->cbufferVS);
                 this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
             }
 
             if (s->s1.t) this->context->PSSetShaderResources(0, 1, &s->s1.t->shaderResource);
+            s->s1.notexture = !s->s1.t;
             this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
             this->context->UpdateSubresource(this->cbufferPS, 0, 0, &s->s2.flags, 0, 0);            
             this->context->Draw(6, 0);            
@@ -1775,7 +1782,7 @@ VS_OUTPUT main(VertexInputType data)
             if (!this->drawingSprites)
             {
                 this->drawingSprites = true;
-                this->context->VSSetShader(this->defaultVS, 0, 0);
+                this->context->VSSetShader(this->currentVS, 0, 0);
                 this->context->VSSetConstantBuffers(0, 1, &this->cbufferVS);
                 this->context->VSSetConstantBuffers(1, 1, &this->cbufferVScamera);
             }
@@ -2018,6 +2025,28 @@ VS_OUTPUT main(VertexInputType data)
         void disableBlendState()
         {
             this->context->OMSetBlendState(0, 0, 0xffffffff);
+        }
+
+        void setDefaultSpriteVS()
+        {
+            this->currentVS = this->defaultVS;
+            this->context->VSSetShader(this->currentVS, 0, 0);
+        }
+
+        void setSpriteVS(ID3D11VertexShader* vs)
+        {
+            this->currentVS = vs;
+            this->context->VSSetShader(this->currentVS, 0, 0);
+        }
+
+        ID3D11VertexShader* createVertexShader(const char* str)
+        {
+            return this->createVertexShaderFromString(str, "main", "vs_5_0", false);
+        }
+
+        void destroyVertexShader(ID3D11VertexShader* vs)
+        {
+            vs->Release();
         }
     };
 }
