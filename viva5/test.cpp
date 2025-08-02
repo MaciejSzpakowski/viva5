@@ -205,7 +205,7 @@ namespace examples
 
         vi::gl::texture* t = v.resources.addTexture();
         v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
-        vi::util::rng rng;
+        vi::util::rng rng(0,1000);
 
         for (uint i = 0; i < count; i++)
         {
@@ -213,9 +213,9 @@ namespace examples
             s->init(t);
             v.graphics.setUvFromPixels(s, 293.f, 18.f, 6.f, 13.f, 512.f, 512.f);
             v.graphics.setPixelScale(s, 6*2, 13*2);
-            s->s1.rot = rng.rnd() * 2.0f * 3.1415926f;
-            s->s1.x = rng.rnd() * 2.0f - 1;
-            s->s1.y = rng.rnd() * 2.0f - 1;
+            s->s1.rot = rng.rnd() / 1000.0f * 2.0f * 3.1415926f;
+            s->s1.x = rng.rnd() / 1000.0f * 2.0f - 1;
+            s->s1.y = rng.rnd() / 1000.0f * 2.0f - 1;
         }
 
         uint frames = 0;
@@ -420,137 +420,6 @@ namespace examples
         wnd.destroy();
     }
 
-    // get some cursor data
-    // left click and mouse move to move square
-    // right click and mouse move to move square using raw input
-    // HOME to return square to 0,0
-    // move camera with WSAD zoom Q/E
-    // fixed sprite wont be affected by camera transform
-    // it will behave like camera was at 0,0 and scale 1
-    /*void mouseAndFixedSprite()
-    {
-        gameData data;
-
-        auto loop = [&](uint i)
-        {
-            vi::graphics::sprite* sq = data.sprites;
-            vi::input::mouse* m = &data.v.mouse;
-            data.v.timer.update();
-            data.v.mouse.update(&data.v.window, &data.v.camera);
-            data.v.keyboard.update();
-
-            int x, y, dx, dy, xraw, yraw;
-            float wx, wy;
-
-            data.v.mouse.getCursorClientPos(&x, &y);
-            data.v.mouse.getCursorScreenDelta(&dx, &dy);
-            data.v.mouse.getCursorDeltaRaw(&xraw, &yraw);
-            data.v.mouse.getCursorWorldPos(&wx, &wy);
-            short mouseWheel = data.v.mouse.getWheelDelta();
-            char str[500];
-            // number of sprites to render
-            uint count = sprintf(str, "Cursor:\n    Client %d %d\n    Delta %d %d\n    World %f %f\nSquare: %f %f\nMouse Wheel: %d",
-                x, y, dx, dy, wx, wy, sq->s1.x, sq->s1.y, mouseWheel);
-            // subtract new lines since they dont have glyphs and add back the square
-            count = count - 5 + 1;
-
-            data.t[0].str = str;
-            data.t[0].update();
-
-            // move square
-            if (data.v.keyboard.isKeyDown(vi::input::key::LMOUSE))
-            {
-                sq->s1.x += (float)dx * 0.003f;
-                sq->s1.y += (float)dy * 0.003f;
-            }
-
-            if (data.v.keyboard.isKeyDown(vi::input::key::RMOUSE))
-            {
-                sq->s1.x += (float)xraw * 0.01f;
-                sq->s1.y += (float)yraw * 0.01f;
-            }
-
-            // reset square
-            if (data.v.keyboard.isKeyDown(vi::input::key::HOME))
-            {
-                sq->s2.pos = { 0,0 };
-            }
-
-            float frameTime = data.v.timer.getTickTimeSec();
-
-            if (data.v.keyboard.isKeyDown('A'))
-            {
-                data.v.camera.x -= frameTime;
-            }
-            else if (data.v.keyboard.isKeyDown('D'))
-            {
-                data.v.camera.x += frameTime;
-            }
-
-            if (data.v.keyboard.isKeyDown('W'))
-            {
-                data.v.camera.y -= frameTime;
-            }
-            else if (data.v.keyboard.isKeyDown('S'))
-            {
-                data.v.camera.y += frameTime;
-            }
-
-            if (data.v.keyboard.isKeyDown('Q'))
-            {
-                data.v.camera.scale *= 1 - frameTime * .3f;
-            }
-            else if (data.v.keyboard.isKeyDown('E'))
-            {
-                data.v.camera.scale *= 1 + frameTime * .3f;
-            }
-
-            vi::graphics::drawScene(&data.v.graphics, data.sprites, count, &data.v.camera);
-        };
-
-        vi::vivaInfo info;
-        info.width = 960;
-        info.height = 540;
-        info.title = "Mouse";
-        data.v.init(&info);
-
-        vi::graphics::createTextureFromFile(&data.v.graphics, "textures/font1.png", data.tex);
-        byte dot[] = { 255,255,255,255 };
-        vi::graphics::createTextureFromBytes(&data.v.graphics, dot, 1, 1, data.tex + 1);
-        vi::graphics::pushTextures(&data.v.graphics, data.tex, 2);
-
-        // font is a simple object that combines texture and uv for glyphs together
-        vi::graphics::font font1 = { data.tex };
-        vi::graphics::uvSplitInfo usi = { 256,36,0,0,8,12,32,96 };
-        vi::graphics::uvSplit(&usi, font1.uv);
-
-        // square for moving
-        vi::graphics::initSprite(data.sprites, 1);
-        data.sprites[0].s2.scale = { 0.3f,0.3f };
-        data.sprites[0].s2.col = { 0.1f,0.4f,0.9f };
-
-        // text starts at 2nd sprite
-        data.t[0] = { &font1, data.sprites + 1, nullptr, 0, 0 };
-        data.sprites[1].s2.pos = { -1, -0.5f };
-        data.sprites[1].s2.origin = { -1,-1 };
-        vi::graphics::setScreenPos(&data.v.graphics, &data.v.camera, 5, 5, 
-            &data.sprites[1].s1.x, &data.sprites[1].s1.y);
-        vi::graphics::setPixelScale(&data.v.graphics, &data.v.camera, 16, 24,
-            &data.sprites[1].s1.sx, &data.sprites[1].s1.sy);
-
-        // set text color black
-        for (uint i = 1; i < 1000; i++)
-        {
-            data.sprites[i].s2.col = { 0,0,0 };
-            data.sprites[i].s1.fixed = true;
-        }
-
-        vi::system::loop<uint>(loop, 0);
-
-        vi::graphics::destroyTexture(&data.v.graphics, data.tex);
-        data.v.destroy();
-    }*/
-
     /// <summary>
     /// Typing test
     /// </summary>
@@ -729,11 +598,11 @@ namespace examples
         v.destroy();
     }
 
+    // custom VS still must conform to layout and buffer names
+    // so struct sprite, struct camera, cbuffer1, cbuffer2, struct VS_OUTPUT must be the same for all VS
+    // main function must be called 'main'
     void customVS()
-    {
-        // custom VS still must conform to layout and buffer names
-        // so struct sprite, struct camera, cbuffer1, cbuffer2, struct VS_OUTPUT must be the same for all VS
-        // main function must be called 'main'
+    {        
         const char customVSSoure[] = R"(
 struct sprite
 {
@@ -856,6 +725,8 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         wnd.destroy();
     }
 
+    // draw lines
+    // have to call setWireframe() before rendering lines
     void lines()
     {
         vi::time::timer timer;
@@ -905,6 +776,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 
     // move camera with WSAD zoom Q/E
     // zooming should be towards the center of the screen
+    // also have another camera which you cannot move so sprite with that camera stay in the same place while others move
     void camera()
     {
         // internal viva camera is worldview
@@ -1265,6 +1137,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
     }
 
     // more drawing options
+    // loc, rot, scale, flipping, colors
     void moreSprites()
     {
         vivaInfo info;
@@ -1329,6 +1202,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         v.destroy();
     }
 
+    // render sprite with texture from file, without texture and texture from bytes
     void basicSprite()
     {
         vi::system::windowInfo winfo = { 500, 500, "Basic Sprite"};
@@ -1370,6 +1244,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         wnd.destroy();
     }
 
+    // various mesh rendering options
     void mesh()
     {
         vi::system::windowInfo winfo = {};
@@ -1724,7 +1599,6 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         inputState();
         typing();
         zindex();
-        //mouseAndFixedSprite();
         //queue();
         //network();
 
