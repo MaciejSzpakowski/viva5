@@ -205,7 +205,8 @@ namespace examples
 
         vi::gl::texture* t = v.resources.addTexture();
         v.graphics.createTextureFromFile(t, "textures/0x72_DungeonTilesetII_v1.png");
-        vi::util::rng rng(0,1000);
+        vi::util::rng rng;
+        rng.init(0, 1000);
 
         for (uint i = 0; i < count; i++)
         {

@@ -176,8 +176,11 @@ namespace vi::util
         std::mt19937 mt;
         std::uniform_int_distribution<int> distr;
 
-        rng(int min, int max) :mt(::time(0)), distr(min, max)
+        void init(int min, int max)
         {
+            mt.seed(::time(0));
+            this->distr = std::uniform_int_distribution<int>(min, max);
+
             // warm up
             for (int i = 0; i < 100; i++)
                 this->rnd();
