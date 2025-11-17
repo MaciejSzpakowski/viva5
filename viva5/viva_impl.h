@@ -263,6 +263,23 @@ namespace vi::math
         assert(false);
         return 0;
     }
+
+    float calcAngle(float P1X, float P1Y, float P2X, float P2Y,
+        float P3X, float P3Y) {
+
+        float numerator = P2Y * (P1X - P3X) + P1Y * (P3X - P2X) + P3Y * (P2X - P1X);
+        float denominator = (P2X - P1X) * (P1X - P3X) + (P2Y - P1Y) * (P1Y - P3Y);
+        float ratio = numerator / denominator;
+
+        float angleRad = atanf(ratio);
+        float angleDeg = (angleRad * 180) / PI;
+
+        if (angleDeg < 0) {
+            angleDeg = 180 + angleDeg;
+        }
+
+        return angleDeg;
+    }
 }
 
 namespace vi::system
@@ -499,7 +516,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         discard;
         return float4(0,0,0,0);
-    }
+}
     else if(notexture)
     {
         return float4(input.Col.rgba);
@@ -693,7 +710,11 @@ struct VS_OUTPUT
     uint4 data: COLOR2;
 };
 
-float4x4 calcWorldViewProj()
+float4x4 calcWorldViewProj(bool transform)
+{
+    float4x4 worldMat = {1,0,0,0, 0,1,0,0, 0,0,1,1, 0,0,0,1};
+
+    if(transform)
 {
     float cr = cos(w.q1 * 0.5);
     float sr = sin(w.q1 * 0.5);
@@ -726,7 +747,8 @@ float4x4 calcWorldViewProj()
         0,0,0,1
     };
 
-    float4x4 worldMat = mul(locMat, mul(rotMat, scaleMat));
+    worldMat = mul(locMat, mul(rotMat, scaleMat));
+}
     
     float3 eye = {v.eyex, v.eyey, v.eyez};
     float3 at = {v.atx,v.aty,v.atz};
@@ -754,12 +776,27 @@ float4x4 calcWorldViewProj()
     return worldViewProj;
 }
 
-VS_OUTPUT main(VertexInputType data)
-{    
+VS_OUTPUT main(VertexInputType data, uint vid : SV_VertexID)
+{
 	float4 pos = float4(data.pos.x,data.pos.y,data.pos.z,1.0f);
 
 	VS_OUTPUT output;
-    
+
+if(w.data == 16)
+{
+if(vid == 0)
+            pos = float4(w.x,w.y,w.z,1.0f);
+        if(vid == 1)
+            pos = float4(w.q1,w.q2,w.q3,1.0f);
+        if(vid == 2)
+            pos = float4(w.sx,w.sy,w.sz,1.0f);
+        output.Pos = mul(calcWorldViewProj(false),pos);
+        output.Col = float4(w.color.r,w.color.g,w.color.b,1);
+	    output.TexCoord = float2(0,0);
+output.data = uint4(w.data,0,0,0);
+return output;
+}   
+
     if(w.data & 4)
     {
 	    output.Pos = mul(transform,pos);
@@ -774,7 +811,7 @@ VS_OUTPUT main(VertexInputType data)
     }        
     else
     {
-        output.Pos = mul(calcWorldViewProj(),pos);
+        output.Pos = mul(calcWorldViewProj(true),pos);
     }
 
 	output.Col = w.color;
@@ -953,6 +990,71 @@ VS_OUTPUT main(VertexInputType data)
             this->s2.scale = { 1,1 };
             this->s2.uv1 = { 0,0,1,1 };
         }
+    };
+
+    // TODO, this should replace sprite
+    _declspec(align(16))
+        union spriten
+    {
+        struct
+        {
+            vector3 pos;
+            vector2 scale;
+            float rot;
+            vector2 origin;
+            uv uv1;
+            color col;
+            uint flags;
+            texture* t;
+        };
+        struct
+        {
+            float x;
+            float y;
+            float z;
+            // scale x
+            float sx;
+
+            // 16 byte
+
+            // scale y
+            float sy;
+            // angle
+            float rot;
+            // origin x
+            float ox;
+            // origin y
+            float oy;
+
+            // 16 byte
+
+            // uv left
+            float left;
+            // uv top
+            float top;
+            // uv right
+            float right;
+            // uv bottom
+            float bottom;
+
+            // 16 byte
+
+            float r;
+            float g;
+            float b;
+            float a;
+
+            // 16 byte
+            // some extra settings
+            uint nodraw : 1;
+            /// <summary>
+            /// no need to set manually, set to true if no texture on sprite
+            /// </summary>
+            uint notexture : 1;
+            uint padding : 30;
+
+            texture* t;
+        };
     };
 
     struct dynamic
@@ -1219,6 +1321,21 @@ VS_OUTPUT main(VertexInputType data)
         color color;
     };
 
+    _declspec(align(16))
+    struct line3d
+    {
+        vector3 p1;
+        float pad1;
+
+        vector3 p2;
+        float pad2;
+
+        float pad3[3];
+        uint data;
+
+        color color;
+    };
+
     struct mesh
     {
         vertex* v;
@@ -1238,10 +1355,13 @@ VS_OUTPUT main(VertexInputType data)
 
         vector3 pos;
         float pad1;
+
         vector3 rot;
         float pad2;
+
         vector3 sca;
         uint data;
+
         color color;
         uint pad3;
     };
@@ -1777,7 +1897,7 @@ VS_OUTPUT main(VertexInputType data)
             if (s->s1.t) this->context->PSSetShaderResources(0, 1, &s->s1.t->shaderResource);
             s->s1.notexture = !s->s1.t;
             this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
-            this->context->UpdateSubresource(this->cbufferPS, 0, 0, &s->s2.flags, 0, 0);            
+            this->context->UpdateSubresource(this->cbufferPS, 0, 0, &s->s2.flags, 0, 0);
             this->context->Draw(6, 0);            
         }
 
@@ -1823,16 +1943,19 @@ VS_OUTPUT main(VertexInputType data)
                 this->context->VSSetConstantBuffers(2, 1, &this->transform);
             }
 
-            if (m->t)
+            if (m->t)            
                 this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
 
-            this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
+            int psdata[] = { !m->t,0,0,0 };
+            this->context->UpdateSubresource(this->cbufferPS, 0, 0, psdata, 0, 0);
 
             if (transform)
             {
                 m->data |= APPLY_TRANSFORM;
                 this->context->UpdateSubresource(this->transform, 0, NULL, transform, 0, 0);
             }
+
+            this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
 
             if (m->indexBuffer)
             {
@@ -1868,10 +1991,15 @@ VS_OUTPUT main(VertexInputType data)
                 this->drawingSprites = false;
                 this->context->VSSetShader(this->defaultMeshVS, 0, 0);
                 this->context->VSSetConstantBuffers(0, 1, &this->world);
+                this->context->VSSetConstantBuffers(1, 1, &this->view);
+                this->context->VSSetConstantBuffers(2, 1, &this->transform);
             }
 
             if (m->t)
                 this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
+
+            int psdata[] = { !m->t,0,0,0 };
+            this->context->UpdateSubresource(this->cbufferPS, 0, 0, psdata, 0, 0);
 
             m->data |= 8;
             this->context->UpdateSubresource(this->world, 0, NULL, &m->pos, 0, 0);
@@ -1880,6 +2008,29 @@ VS_OUTPUT main(VertexInputType data)
             UINT offset = 0;
             this->context->IASetVertexBuffers(0, 1, &this->dynamicVertexBuffer, &stride, &offset);
             this->context->Draw(vertexCount, 0);
+        }
+
+        void drawLine3d(line3d* m)
+        {
+            UINT stride = sizeof(vertex);
+            UINT offset = 0;
+
+            if (this->drawingSprites)
+            {
+                this->drawingSprites = false;
+                this->context->VSSetShader(this->defaultMeshVS, 0, 0);
+                this->context->VSSetConstantBuffers(0, 1, &this->world);
+                this->context->VSSetConstantBuffers(1, 1, &this->view);
+                this->context->VSSetConstantBuffers(2, 1, &this->transform);
+            }
+
+            m->data = 16;
+            this->context->UpdateSubresource(this->world, 0, NULL, m, 0, 0);
+
+            int psdata[] = { 1,0,0,0 };
+            this->context->UpdateSubresource(this->cbufferPS, 0, 0, psdata, 0, 0);
+
+            this->context->Draw(3, 0);
         }
 
         void endScene()

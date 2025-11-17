@@ -1248,6 +1248,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
     // various mesh rendering options
     void mesh()
     {
+        printf("BROKEN! drawMeshDynamic doesnt rendern\n");
         vi::system::windowInfo winfo = {};
         winfo.width = 500;
         winfo.height = 500;
@@ -1338,8 +1339,21 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         m[0].data = 2;
         m[1].color = { 1,0,0 };
 
+        vi::gl::line3d line = {};
+        line.p1 = { 10,0,0 };
+        line.p2 = { -10,0,0 };
+        line.color = { 1,0,0,1 };
+        vi::gl::line3d line2 = {};
+        line2.p1 = { 0,10,0 };
+        line2.p2 = { 0,-10,0 };
+        line2.color = { 0,1,0,1 };
+        vi::gl::line3d line3 = {};
+        line3.p1 = { 0,0,10 };
+        line3.p2 = { 0,0,-10 };
+        line3.color = { 0,0,1,1 };
+
         vi::input::keyboard k;
-        k.init();        
+        k.init();
 
         while (wnd.update())
         {
@@ -1380,7 +1394,14 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 
             for (uint i = 1; i < meshCount; i++)
                 g.drawMesh(m + i);
+
+            g.setWireframe();
+            g.drawLine3d(&line);
+            g.drawLine3d(&line2);
+            g.drawLine3d(&line3);
+            g.setSolid();
             
+            // TODO this broke
             g.drawMeshDynamic(&dynamicMesh, 3);
 
             g.endScene();
@@ -1486,6 +1507,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 
     void blendState()
     {
+        printf("BROKEN ! water texture missing?\n");
         vi::system::windowInfo winfo = {};
         winfo.width = 500;
         winfo.height = 500;
