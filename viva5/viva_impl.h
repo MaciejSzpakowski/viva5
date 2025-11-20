@@ -789,7 +789,7 @@ if(vid == 0)
         if(vid == 1)
             pos = float4(w.q1,w.q2,w.q3,1.0f);
         if(vid == 2)
-            pos = float4(w.sx,w.sy,w.sz,1.0f);
+            pos = float4(w.x,w.y,w.z,1.0f);
         output.Pos = mul(calcWorldViewProj(false),pos);
         output.Col = float4(w.color.r,w.color.g,w.color.b,1);
 	    output.TexCoord = float2(0,0);

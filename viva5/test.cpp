@@ -1351,6 +1351,22 @@ VS_OUTPUT main(uint vid : SV_VertexID)
         line3.p1 = { 0,0,10 };
         line3.p2 = { 0,0,-10 };
         line3.color = { 0,0,1,1 };
+        vi::gl::line3d line4 = {};
+        line4.p1 = { 10,0,20 };
+        line4.p2 = { 10,0,-20 };
+        line4.color = { 1,1,1,1 };
+        vi::gl::line3d line5 = {};
+        line5.p1 = { 20,0,-10 };
+        line5.p2 = { -20,0,-10 };
+        line5.color = { 1,1,1,1 };
+        vi::gl::line3d line6 = {};
+        line6.p1 = { -10,0,-20 };
+        line6.p2 = { -10,0,20 };
+        line6.color = { 1,1,1,1 };
+        vi::gl::line3d line7 = {};
+        line7.p1 = { -20,0,10 };
+        line7.p2 = { 20,0,10 };
+        line7.color = { 1,1,1,1 };
 
         vi::input::keyboard k;
         k.init();
@@ -1399,6 +1415,10 @@ VS_OUTPUT main(uint vid : SV_VertexID)
             g.drawLine3d(&line);
             g.drawLine3d(&line2);
             g.drawLine3d(&line3);
+            g.drawLine3d(&line4);
+            g.drawLine3d(&line5);
+            g.drawLine3d(&line6);
+            g.drawLine3d(&line7);
             g.setSolid();
             
             // TODO this broke
@@ -1606,9 +1626,9 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 
     int main()
     {
-        customVS();
-        basicSprite();
-        lines();
+        //customVS();
+        //basicSprite();
+        //lines();
         mesh();
         mesh2();
         moreSprites();
