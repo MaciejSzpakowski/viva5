@@ -214,6 +214,7 @@ namespace vi::math
     const float HALF_PI = PI / 2;
     const float THIRD_PI = PI / 3;
     const float FORTH_PI = PI / 4;
+    const float THREE_HALVES_PI = PI * 1.5f;
     const float DEGREE = PI / 180;
 
     // magnitude of a vector
@@ -264,7 +265,19 @@ namespace vi::math
         return 0;
     }
 
-    float calcAngle(float P1X, float P1Y, float P2X, float P2Y,
+    // rot point (x,y) around origin (ox, oy) by angle
+    void rot2D(float x, float y, float ox, float oy, float angle, float* dstx, float* dsty)
+    {
+        float px = x - ox;
+        float py = y - oy;
+        float dx = px * cosf(angle) - py * sinf(angle);
+        float dy = px * sinf(angle) + py * cosf(angle);
+        *dstx = dx + ox;
+        *dsty = dy + oy;
+    }
+
+    // calc angle p1,p2,p3
+    float calcAngle2D(float P1X, float P1Y, float P2X, float P2Y,
         float P3X, float P3Y) {
 
         float numerator = P2Y * (P1X - P3X) + P1Y * (P3X - P2X) + P3Y * (P2X - P1X);
@@ -279,6 +292,11 @@ namespace vi::math
         }
 
         return angleDeg;
+    }
+
+    float deg2rad(float deg)
+    {
+        return deg * PI / 180.0f;
     }
 }
 
@@ -516,7 +534,7 @@ float4 main(VS_OUTPUT input) : SV_TARGET
     {
         discard;
         return float4(0,0,0,0);
-}
+    }
     else if(notexture)
     {
         return float4(input.Col.rgba);
@@ -1322,7 +1340,7 @@ return output;
     };
 
     _declspec(align(16))
-    struct line3d
+        struct line3d
     {
         vector3 p1;
         float pad1;
@@ -1442,12 +1460,12 @@ return output;
             ID3D11SamplerState* sampler;
             D3D11_SAMPLER_DESC sampDesc;
             ZeroMemory(&sampDesc, sizeof(sampDesc));
-            sampDesc.Filter = mode == TextureFilter::Point ?
-                D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+            sampDesc.Filter = mode == TextureFilter::Point ? D3D11_FILTER_MIN_MAG_MIP_POINT : D3D11_FILTER_MIN_MAG_MIP_LINEAR; // D3D11_FILTER_ANISOTROPIC
             sampDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
             sampDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
             sampDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
             sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+            //sampDesc.MaxAnisotropy = D3D11_REQ_MAXANISOTROPY;
             sampDesc.MinLOD = 0;
             sampDesc.MaxLOD = D3D11_FLOAT32_MAX;
             this->device->CreateSamplerState(&sampDesc, &sampler);
@@ -1585,7 +1603,7 @@ return output;
             depthStencilDesc.Height = info->wnd->height;
             depthStencilDesc.MipLevels = 1;
             depthStencilDesc.ArraySize = 1;
-            depthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+            depthStencilDesc.Format = DXGI_FORMAT_D32_FLOAT;
             depthStencilDesc.SampleDesc.Count = 1;
             depthStencilDesc.SampleDesc.Quality = 0;
             depthStencilDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -1898,7 +1916,7 @@ return output;
             s->s1.notexture = !s->s1.t;
             this->context->UpdateSubresource(this->cbufferVS, 0, NULL, s, 0, 0);
             this->context->UpdateSubresource(this->cbufferPS, 0, 0, &s->s2.flags, 0, 0);
-            this->context->Draw(6, 0);            
+            this->context->Draw(6, 0);
         }
 
         /// <summary>
@@ -1943,7 +1961,7 @@ return output;
                 this->context->VSSetConstantBuffers(2, 1, &this->transform);
             }
 
-            if (m->t)            
+            if (m->t)
                 this->context->PSSetShaderResources(0, 1, &m->t->shaderResource);
 
             int psdata[] = { !m->t,0,0,0 };
@@ -2377,7 +2395,7 @@ namespace vi::input
 
         char getKeyTyped()
         {
-
+            return this->typedKey;
         }
     };
 
