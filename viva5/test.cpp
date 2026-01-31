@@ -518,7 +518,7 @@ namespace examples
             for (int i = 0, c = 0; c < 256; c++)
             {
                 if (v.keyboard.isKeyDown(c))
-                    sprintf(str + strlen(str), "%d ", c);
+                    sprintf(str + strlen(str), "%d(0x%x) ", c, c);
             }
 
             text->update();
@@ -1626,6 +1626,7 @@ VS_OUTPUT main(uint vid : SV_VertexID)
 
     int main()
     {
+        inputState();
         //customVS();
         //basicSprite();
         //lines();
